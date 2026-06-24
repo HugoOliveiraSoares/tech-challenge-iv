@@ -1,0 +1,261 @@
+openapi: 3.0.3
+info:
+  title: Plataforma de Feedback Educacional API
+  version: 1.0.0
+  description: |
+    API REST para registro de feedbacks de estudantes.
+    A API recebe a descrição e a nota da avaliação, classifica automaticamente a urgência
+    e aciona o fluxo serverless de persistência e notificação quando necessário.
+servers:
+  - url: https://{apiId}.execute-api.{region}.amazonaws.com/{stage}
+    description: API Gateway AWS
+    variables:
+      apiId:
+        default: example
+      region:
+        default: us-east-1
+      stage:
+        default: dev
+  - url: http://localhost:8080
+    description: Execução local Quarkus
+
+tags:
+  - name: Avaliações
+    description: Operações relacionadas ao recebimento de feedbacks
+  - name: Saúde
+    description: Verificação de disponibilidade da aplicação
+
+paths:
+  /avaliacao:
+    post:
+      tags:
+        - Avaliações
+      summary: Registrar feedback de aula
+      description: |
+        Recebe um feedback, valida o payload, classifica a urgência com base na nota,
+        persiste no DynamoDB e aciona notificação para casos críticos.
+      operationId: criarAvaliacao
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CriarAvaliacaoRequest"
+            examples:
+              avaliacaoCritica:
+                summary: Avaliação crítica
+                value:
+                  descricao: A aula estava confusa e não consegui acompanhar o conteúdo.
+                  nota: 2
+              avaliacaoBaixaUrgencia:
+                summary: Avaliação positiva
+                value:
+                  descricao: Aula bem explicada, com bons exemplos práticos.
+                  nota: 9
+      responses:
+        "201":
+          description: Feedback registrado com sucesso
+          headers:
+            X-Correlation-Id:
+              schema:
+                type: string
+              description: Identificador usado para rastrear a requisição nos logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CriarAvaliacaoResponse"
+              example:
+                id: 018f7e7a-5c45-7a24-8de1-f8ff2b7d4f91
+                status: CREATED
+                urgencia: CRITICA
+                dataEnvio: "2026-05-31T13:00:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /health:
+    get:
+      tags:
+        - Saúde
+      summary: Verificar saúde da aplicação
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Aplicação disponível
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: UP
+
+components:
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Identificador opcional para rastreamento da requisição
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 100
+
+  responses:
+    BadRequest:
+      description: Payload inválido ou malformado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            notaAusente:
+              value:
+                code: VALIDATION_ERROR
+                message: Campo nota é obrigatório.
+                correlationId: 58d4d37b-5072-40b3-8a33-3f5e89c1cd4d
+                details:
+                  - field: nota
+                    message: não deve ser nulo
+            jsonInvalido:
+              value:
+                code: MALFORMED_JSON
+                message: Corpo da requisição inválido.
+                correlationId: 58d4d37b-5072-40b3-8a33-3f5e89c1cd4d
+                details: []
+    UnprocessableEntity:
+      description: Payload sintaticamente válido, mas viola regra de negócio
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: BUSINESS_RULE_ERROR
+            message: Nota deve estar entre 0 e 10.
+            correlationId: 58d4d37b-5072-40b3-8a33-3f5e89c1cd4d
+            details:
+              - field: nota
+                message: valor permitido entre 0 e 10
+    TooManyRequests:
+      description: Limite de requisições excedido no API Gateway
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: TOO_MANY_REQUESTS
+            message: Limite de requisições excedido. Tente novamente mais tarde.
+            correlationId: 58d4d37b-5072-40b3-8a33-3f5e89c1cd4d
+            details: []
+    InternalServerError:
+      description: Erro interno não esperado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: INTERNAL_ERROR
+            message: Erro interno ao processar a solicitação.
+            correlationId: 58d4d37b-5072-40b3-8a33-3f5e89c1cd4d
+            details: []
+
+  schemas:
+    CriarAvaliacaoRequest:
+      type: object
+      required:
+        - descricao
+        - nota
+      properties:
+        descricao:
+          type: string
+          description: Descrição textual do feedback enviado pelo estudante
+          minLength: 10
+          maxLength: 1000
+          example: A aula estava confusa e não consegui acompanhar o conteúdo.
+        nota:
+          type: integer
+          description: Nota da avaliação de 0 a 10
+          minimum: 0
+          maximum: 10
+          example: 2
+
+    CriarAvaliacaoResponse:
+      type: object
+      required:
+        - id
+        - status
+        - urgencia
+        - dataEnvio
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 018f7e7a-5c45-7a24-8de1-f8ff2b7d4f91
+        status:
+          type: string
+          enum: [CREATED]
+          example: CREATED
+        urgencia:
+          $ref: "#/components/schemas/Urgencia"
+        dataEnvio:
+          type: string
+          format: date-time
+          example: "2026-05-31T13:00:00Z"
+
+    Urgencia:
+      type: string
+      enum:
+        - CRITICA
+        - MEDIA
+        - BAIXA
+      description: |
+        CRITICA: nota entre 0 e 3.
+        MEDIA: nota entre 4 e 6.
+        BAIXA: nota entre 7 e 10.
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+        - correlationId
+        - details
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Campo nota é obrigatório.
+        correlationId:
+          type: string
+          example: 58d4d37b-5072-40b3-8a33-3f5e89c1cd4d
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+
+    ErrorDetail:
+      type: object
+      properties:
+        field:
+          type: string
+          example: nota
+        message:
+          type: string
+          example: não deve ser nulo
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN]
+          example: UP
