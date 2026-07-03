@@ -1,198 +1,161 @@
-# Decisões e Tradeoffs
+# Decisoes e Tradeoffs
 
-## Decisões Verificadas
+## Decisoes Verificadas
 
-### Endpoint sem acento
+### API publica sem acento
 
-Decisão: usar `POST /avaliacao`, não `/avaliação`.
+Decisao: usar `POST /avaliacao`, nao a forma acentuada do caminho.
 
-Evidência: `docs/Especificacao_Tecnica.md`, `docs/openapi-feedback-api.yaml` e `infra/modules/api-gateway/main.tf` usam `/avaliacao`.
+Evidencia: `docs/openapi-feedback-api.yaml`, `apps/feedback-api/src/main/java/.../AvaliacaoResource.java` e `infra/modules/api-gateway/main.tf`.
 
-Consequência: evita problemas de encoding em API Gateway, clientes HTTP, testes e ferramentas de linha de comando. Qualquer implementação deve rejeitar ou não documentar a rota acentuada, salvo decisão explícita em contrário.
+Consequencia: reduz problemas de encoding em clientes HTTP, API Gateway, testes e ferramentas CLI. A rota acentuada nao deve ser adicionada sem decisao explicita.
 
-### Separação por três Lambdas
+### Maven multi-modulo
 
-Decisão: dividir responsabilidades em `feedback-api`, `critical-notifier` e `weekly-report`.
+Decisao: organizar o projeto como Maven agregador com `libs/shared-kernel` e tres apps em `apps/*`.
 
-Evidência: especificação, variáveis Terraform e módulos de ambiente.
+Evidencia: `pom.xml` raiz lista `libs/shared-kernel`, `apps/feedback-api`, `apps/critical-notifier` e `apps/weekly-report`.
 
-Consequência: reduz acoplamento operacional e permite permissões IAM específicas. Também aumenta a necessidade de contrato claro para eventos SNS e de observabilidade entre componentes.
+Tradeoff: facilita build unificado e compartilhamento controlado, mas exige cuidado para `shared-kernel` nao virar deposito de DTOs acoplados a transporte.
 
-### Notificação crítica assíncrona
+### Java 21 e Quarkus 3.15.3
 
-Decisão: `feedback-api` publica SNS e não envia e-mail diretamente.
+Decisao: usar Java 21 e Quarkus para Lambdas.
 
-Evidência: RN007 e Terraform com assinatura SNS para `critical-notifier`.
+Evidencia: `mise.toml`, `pom.xml` raiz e `infra/modules/lambda/variables.tf`.
 
-Tradeoff: melhora isolamento e latência da API, mas introduz retries, entrega eventual e risco de e-mail duplicado sem idempotência.
+Consequencia: stack moderna e compativel com runtime `java21`, mas o empacotamento precisa continuar produzindo `target/function.zip` nos caminhos esperados pelo Terraform.
 
-### DynamoDB com GSI por período
+### Tres responsabilidades serverless separadas
 
-Decisão: tabela DynamoDB tem `id` como chave primária e GSI `dataEnvio-index` com `periodo` e `dataEnvio`.
+Decisao: separar `feedback-api`, `critical-notifier` e `weekly-report`.
 
-Evidência: `infra/modules/dynamodb/main.tf`.
+Evidencia: modulos Maven, diretorios `apps/*` e Terraform dos ambientes.
 
-Tradeoff: exige gerar e persistir `periodo` corretamente, mas evita `Scan` para relatório semanal em cenários normais.
+Tradeoff: melhora isolamento, permissao IAM e evolucao independente. Aumenta a necessidade de contratos claros entre componentes, especialmente evento SNS e payloads de agendamento.
+
+### Clean/Hexagonal simples no codigo Java
+
+Decisao: separar `core` e `infra`, com use cases dependendo de interfaces `Gateway`.
+
+Evidencia: estrutura dos tres apps e testes de use case com gateways fake/in-memory.
+
+Consequencia: facilita substituir adapters no-op por AWS SDK sem contaminar regras de negocio. O custo e mais arquivos/interfaces mesmo em casos pequenos.
+
+### Adapters temporarios in-memory/no-op
+
+Decisao: manter implementacao executavel inicial sem AWS SDK real nos apps.
+
+Evidencia: `InMemoryFeedbackGateway`, `NoOpCriticalFeedbackPublisher`, `NoOpEmailGateway` e `NoOpReportEmailGateway`.
+
+Tradeoff: permite testar fluxo de aplicacao e gerar artefatos Lambda cedo, mas pode mascarar lacunas de integracao. A documentacao deve deixar claro que persistencia, SNS e SES ainda nao funcionam de ponta a ponta.
+
+### Urgencia no shared kernel
+
+Decisao: centralizar `Urgencia` e `UrgenciaClassifier` em `libs/shared-kernel`.
+
+Evidencia: dependencia de `feedback-api` no `shared-kernel` e testes `UrgenciaClassifierTest`.
+
+Consequencia: regra de classificacao fica unica e testavel. Deve permanecer pequena; mover DTOs de API ou eventos para la aumentaria acoplamento entre Lambdas.
+
+### DynamoDB com GSI por periodo
+
+Decisao: tabela `feedbacks` usa `id` como chave primaria e GSI `dataEnvio-index` com `periodo` e `dataEnvio`.
+
+Evidencia: `infra/modules/dynamodb/main.tf`.
+
+Tradeoff: favorece relatorio semanal por `Query`, mas obriga a aplicacao a gerar e persistir `periodo`. O codigo atual ainda nao faz isso.
+
+### Notificacao critica assincrona
+
+Decisao: feedback critico deve sair da API via SNS e ser tratado por `critical-notifier`.
+
+Evidencia: Terraform assina a Lambda no topico SNS e `CriarAvaliacaoUseCase` chama `CriticalFeedbackPublisher` apenas para `CRITICA`.
+
+Tradeoff: reduz latencia e acoplamento da API, mas introduz entrega eventual, retries e risco de duplicidade se idempotencia nao for implementada.
 
 ### Terraform como fonte de infraestrutura
 
-Decisão: provisionamento em Terraform, com módulos reutilizáveis e ambientes `dev`/`prod`.
+Decisao: provisionar ambientes com Terraform modularizado.
 
-Evidência: `infra/environments/*` e `infra/modules/*`.
+Evidencia: `infra/environments/{dev,prod}` e `infra/modules/*`.
 
-Consequência: deploy fica reproduzível, mas a aplicação precisa gerar artefatos nos caminhos esperados antes de `plan/apply` completo.
+Consequencia: infraestrutura e revisavel e reproduzivel. O plano completo depende dos zips Lambda existirem porque o modulo usa `filebase64sha256`.
 
-### fakecloud para desenvolvimento local
+### fakecloud para desenvolvimento local de infraestrutura
 
-Decisão: usar fakecloud em `localhost:4566` no ambiente `dev`.
+Decisao: `dev` usa endpoints AWS locais em `localhost:4566`.
 
-Evidência: `docker-compose.yml` e endpoints AWS em `infra/environments/dev/versions.tf`.
+Evidencia: `docker-compose.yml` e `infra/environments/dev/versions.tf`.
 
-Tradeoff: permite desenvolvimento sem AWS real, mas pode haver diferença de suporte/comportamento para API Gateway, Lambda, CloudWatch e EventBridge em relação à AWS.
+Tradeoff: reduz dependencia de conta AWS real, mas pode divergir da AWS em API Gateway, Lambda, EventBridge e CloudWatch.
 
-### Produção com CORS fechado por padrão
+### CORS restrito por padrao em producao
 
-Decisão: `prod` usa `cors_allowed_origins = []`; `dev` usa `[*]`.
+Decisao: `prod` tem `cors_allowed_origins = []`; `dev` usa `[*]`.
 
-Evidência: `infra/environments/prod/variables.tf` e `infra/environments/dev/variables.tf`.
+Evidencia: `infra/environments/prod/variables.tf` e `infra/environments/dev/variables.tf`.
 
-Consequência: produção exige decisão explícita sobre domínios autorizados antes do uso real por browser.
+Consequencia: uso por browsers em producao exige decisao explicita sobre dominios. Evita copiar o comportamento permissivo de dev.
 
-Decisão documental complementar: usar `https://feedback.example.com` como placeholder genérico até existir domínio real de produção.
+### Cron UTC para relatorio semanal
 
-### Escopo acadêmico com práticas essenciais
+Decisao atual: usar `cron(59 23 ? * SUN *)` em `aws_cloudwatch_event_rule`.
 
-Decisão recomendada: priorizar simplicidade acadêmica sem abandonar práticas operacionais essenciais.
+Evidencia: `infra/environments/*/variables.tf` e `infra/modules/eventbridge/main.tf`.
 
-Evidência: o repositório ainda está na fase de especificação/Terraform e o backlog prevê implementação incremental. Não há aplicação, pipeline ou testes executáveis.
+Tradeoff: simples e suportado pelo recurso atual, mas nao configura timezone. Se o requisito for horario de Sao Paulo, deve-se revisar o modulo, possivelmente para EventBridge Scheduler.
 
-Consequência: implementar primeiro contrato HTTP, validação, persistência, SNS/SES, logs estruturados, Terraform e testes. Autenticação completa, DLQ avançada e auto-apply de infraestrutura ficam como melhorias, salvo exigência explícita.
+## Limitacoes Atuais
 
-### Endpoint público sem autenticação no MVP
+- A API persiste apenas em memoria; nenhum item e gravado em DynamoDB pelo codigo Java atual.
+- Feedback critico nao publica SNS real; o adapter apenas loga.
+- Notificacao critica nao envia e-mail real; o adapter SES e no-op.
+- Relatorio semanal nao consulta DynamoDB, nao calcula metricas e nao envia e-mail real.
+- O handler do notifier nao processa o formato real de `SNSEvent`.
+- O handler do weekly report nao processa um evento real de EventBridge; recebe input proprio.
+- `periodo` existe no Terraform/contrato conceitual, mas nao no record `Feedback`.
+- `correlationId` e documentado no OpenAPI, mas nao implementado no codigo.
+- Respostas de erro padronizadas do OpenAPI ainda nao foram implementadas.
+- Alarmes/dashboard esperam metricas customizadas que a aplicacao ainda nao publica.
+- Nao ha DLQ para fluxos assincronos.
+- Nao ha CI/CD versionado em `.github/workflows`.
 
-Decisão recomendada: manter o endpoint público no escopo atual, protegido por throttling e CORS restrito em produção.
+## Riscos Aceitos ou Implicitos
 
-Tradeoff: reduz complexidade para o Tech Challenge, mas não é suficiente para produção real. Se o sistema for exposto fora do contexto acadêmico, adicionar API key, JWT ou Cognito antes de operar com usuários reais.
+- Endpoint sem autenticacao e aceitavel no escopo academico, mas insuficiente para producao real.
+- `weekly-report` tem permissao `dynamodb:Scan` como fallback; isso pode gerar custo/latencia se virar caminho principal.
+- Descricoes sao texto livre e podem conter dados pessoais; sem politica de privacidade, e prudente evitar logs completos.
+- SES sandbox pode bloquear envios para destinatarios nao verificados.
+- fakecloud pode nao reproduzir todos os comportamentos e limites da AWS real.
+- Sem idempotencia, retries de SNS/EventBridge/Lambda podem causar notificacoes ou relatorios duplicados quando os envios reais forem implementados.
 
-### Relatório semanal mesmo sem dados
+## Alternativas Implicitamente Rejeitadas
 
-Decisão recomendada: enviar o relatório semanal mesmo quando não houver feedbacks na semana.
-
-Consequência: o e-mail com contadores zerados serve como evidência operacional de que o agendamento e a Lambda executaram; evita confundir ausência de dados com falha silenciosa.
-
-### Idempotência do relatório semanal
-
-Decisão recomendada: tratar o envio do relatório semanal como idempotente por `periodo` usando a tabela auxiliar DynamoDB `feedback-processing-control-<environment>`.
-
-Tradeoff: evita e-mails duplicados em retry ou reprocessamento manual. Para o MVP, não haverá TTL para os registros de controle e execução manual com reenvio forçado fica fora do escopo.
-
-### Idempotência de notificação crítica
-
-Decisão recomendada: suprimir e-mails duplicados por `feedbackId` no `critical-notifier` usando a tabela auxiliar DynamoDB `feedback-processing-control-<environment>`.
-
-Tradeoff: retries de SNS/Lambda deixam de gerar múltiplos e-mails para o mesmo feedback. Para o MVP, uma escrita condicional com chave de controle derivada de `feedbackId` é suficiente.
-
-### Placeholders operacionais
-
-Decisão recomendada: usar placeholders explícitos enquanto não houver valores reais de produção.
-
-Valores documentais:
-
-- CORS produção: `https://feedback.example.com`.
-- `ADMIN_EMAIL_TO`: `admin-feedback@example.com`.
-
-Consequência: a documentação fica executável para exemplos e revisão, mas esses valores devem ser substituídos antes de uso real.
-
-### Cron UTC no MVP
-
-Decisão: UTC é aceitável para o relatório semanal no MVP.
-
-Evidência: `infra/environments/*/variables.tf` usa `cron(59 23 ? * SUN *)` e `infra/modules/eventbridge/main.tf` usa `aws_cloudwatch_event_rule`, sem timezone configurável.
-
-Consequência: não migrar agora para EventBridge Scheduler. `America/Sao_Paulo` permanece melhoria futura apenas se virar requisito obrigatório.
-
-### Privacidade simples no MVP
-
-Decisão: adotar postura simples de privacidade no MVP acadêmico.
-
-Consequência: orientar que `descricao` não contenha dados pessoais e evitar logar descrições completas. Política formal de retenção, anonimização, consentimento e TTL fica fora do MVP.
-
-### OpenAPI como contrato oficial
-
-Decisão recomendada: tratar `docs/openapi-feedback-api.yaml` como contrato oficial da API HTTP.
-
-Consequência: DTOs, validações, testes de contrato e documentação devem seguir o OpenAPI. Gerar DTOs automaticamente é opcional; não deve ser obrigatório enquanto não houver build Java.
-
-### Ambientes limitados a `dev` e `prod`
-
-Decisão recomendada: manter apenas `dev` e `prod` por enquanto.
-
-Consequência: evita expansão prematura de Terraform e pipeline. Novos ambientes só devem ser criados quando houver necessidade concreta, como homologação separada.
-
-### Terraform com aprovação manual
-
-Decisão recomendada: pipeline futuro deve gerar plano e exigir aprovação manual antes de `apply`, especialmente em `prod`.
-
-Tradeoff: reduz risco operacional e custo de mudanças acidentais. Auto-apply pode ser aceito apenas em ambiente local/dev controlado se o fluxo justificar.
-
-## Decisões Planejadas, Ainda Não Materializadas em Código
-
-### Clean Architecture nos módulos Java
-
-Planejamento: separar `core` e `infra`, mantendo domínio livre de AWS SDK e Quarkus.
-
-Evidência: seção de arquitetura limpa da especificação.
-
-Risco: ainda não há código para garantir a fronteira. A primeira implementação Maven/Quarkus deve criar essa estrutura com cuidado para não acoplar use cases diretamente aos SDKs.
-
-### Shared kernel
-
-Planejamento: criar `libs/shared-kernel`.
-
-Evidência: especificação e backlog.
-
-Tradeoff: reduz duplicação entre Lambdas, mas pode virar acoplamento excessivo se receber DTOs específicos de transporte. Deve conter apenas domínio compartilhado e tipos estáveis.
-
-### Testes com Testcontainers/fakecloud
-
-Planejamento: cobrir integrações AWS locais com Testcontainers/fakecloud, além de unitários e contrato REST.
-
-Evidência: especificação e tasks.
-
-Limitação: não há build nem testes versionados hoje.
-
-## Limitações Atuais
-
-- Não há aplicação Java executável.
-- Não há pipeline CI/CD.
-- Não há contrato versionado para payload SNS além da descrição textual.
-- Não há DLQ configurada para falhas assíncronas.
-- Há decisão de idempotência por `feedbackId` para notificação crítica via `feedback-processing-control-<environment>`, mas ela ainda não está implementada.
-- Há decisão de idempotência por `periodo` para relatório semanal via `feedback-processing-control-<environment>`, mas ela ainda não está implementada.
-- O módulo de agendamento usa `aws_cloudwatch_event_rule` com cron UTC; isso é aceito no MVP, mas não atende timezone configurável.
-- O Terraform calcula hash de artefatos Lambda que ainda não existem.
-
-## Riscos Aceitos ou Implícitos
-
-- Endpoint público sem autenticação documentada pode depender apenas de throttling e CORS, o que não é controle suficiente para todos os cenários.
-- `weekly-report` tem permissão de `Scan` como fallback; isso é aceitável para baixo volume acadêmico, mas não para crescimento sem revisão.
-- Métricas de negócio customizadas são esperadas pelos alarmes/dashboard, mas dependem da aplicação publicá-las corretamente.
-- SES em sandbox pode impedir envio para destinatários não verificados.
-- fakecloud pode não reproduzir integralmente falhas e limites dos serviços AWS reais.
+- Monolito Lambda unico: a estrutura atual separa responsabilidades em tres Lambdas.
+- Envio de e-mail dentro da API: o desenho usa SNS e notifier separado.
+- Rota acentuada: substituida por `/avaliacao` nos contratos e implementacao.
+- CORS `*` em producao: `prod` usa lista vazia por padrao.
 
 ## Pontos para Revisitar
 
-- Implementar schema do evento `FeedbackCritico` publicado no SNS com o payload mínimo documentado na arquitetura.
-- Implementar tabela auxiliar `feedback-processing-control-<environment>` para idempotência.
-- Implementar mecanismo de idempotência para `critical-notifier` por `feedbackId`.
-- Implementar idempotência do relatório semanal por `periodo`, usando a semana ISO fechada como janela de referência.
-- Avaliar troca de `aws_cloudwatch_event_rule` por EventBridge Scheduler somente se timezone `America/Sao_Paulo` virar requisito obrigatório.
-- Definir autenticação ou API key para o endpoint público se o sistema sair do escopo acadêmico.
-- Criar DLQ e alarmes para fluxos assíncronos.
-- Definir nomes de pacotes Java definitivos, mantendo coerência com `br/com/fiap/{app}` sugerido.
+- Definir o contrato real do evento de feedback critico publicado no SNS.
+- Trocar `NoOpCriticalFeedbackPublisher` por adapter SNS real.
+- Trocar `InMemoryFeedbackGateway` por adapter DynamoDB real.
+- Implementar adapter SES real para notificacao critica e relatorio semanal.
+- Definir estrategia de idempotencia para notificacoes criticas por `feedbackId` e relatorios por `periodo`.
+- Decidir se havera tabela auxiliar de controle/idempotencia e modela-la no Terraform.
+- Implementar `correlationId` de ponta a ponta ou ajustar o OpenAPI se a decisao mudar.
+- Implementar metricas customizadas ou ajustar alarmes/dashboard para metricas realmente emitidas.
+- Avaliar DLQ para SNS/Lambda e EventBridge/Lambda.
+- Decidir autenticacao/API key/JWT/Cognito antes de qualquer uso produtivo real.
+- Definir se o relatorio semanal segue UTC ou timezone de negocio.
 
-## Perguntas Abertas Remanescentes
+## Perguntas Abertas
 
-- Qual domínio real substituirá `https://feedback.example.com` em produção?
-- Qual e-mail ou grupo real substituirá `admin-feedback@example.com` em `prod`?
-- Quais serão os nomes de pacotes Java definitivos?
+- Qual dominio real sera usado no CORS de producao?
+- Quais e-mails reais serao verificados no SES para remetente e destinatario administrativo?
+- Qual e o formato definitivo do evento SNS de feedback critico?
+- O relatorio deve ser enviado mesmo sem feedbacks na semana?
+- Qual politica de retencao, anonimizacao ou privacidade se aplica ao texto das avaliacoes?
+- Qual nivel de autenticacao e exigido se o sistema sair do contexto academico?

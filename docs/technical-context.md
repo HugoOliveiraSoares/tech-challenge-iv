@@ -2,37 +2,44 @@
 
 ## Estado Atual Verificado
 
-O repositório ainda não contém aplicação executável. Existem documentação, contrato OpenAPI, backlog de implementação, Docker Compose para fakecloud e Terraform para provisionar a infraestrutura AWS planejada.
+O repositorio contem uma aplicacao Java/Quarkus multi-modulo em estagio inicial, infraestrutura Terraform e contratos/documentacao do Tech Challenge IV. O codigo executavel existe, mas as integracoes reais com AWS ainda nao estao implementadas nos adapters Java.
 
-Arquivos relevantes existentes:
+Arquivos e modulos principais:
 
-- `docs/Especificacao_Tecnica.md`: fonte principal de requisitos técnicos, arquitetura, regras e plano de implementação.
-- `docs/openapi-feedback-api.yaml`: contrato OpenAPI 3.0.3 da API pública.
-- `docker-compose.yml`: fakecloud local em `localhost:4566`.
-- `infra/environments/dev` e `infra/environments/prod`: composições Terraform por ambiente.
-- `infra/modules/*`: módulos Terraform para API Gateway, Lambda, DynamoDB, SNS, SES, EventBridge e CloudWatch.
-- `tasks/*.md`: backlog incremental para construir a aplicação e fechar qualidade, CI/CD, E2E e documentação.
+- `pom.xml`: projeto Maven agregador `feedback-platform`.
+- `libs/shared-kernel`: regras compartilhadas de urgencia (`Urgencia`, `UrgenciaClassifier`).
+- `apps/feedback-api`: API REST Quarkus para `POST /avaliacao` e `GET /health`.
+- `apps/critical-notifier`: Lambda Quarkus para processar notificacoes criticas, hoje com envio de e-mail no-op.
+- `apps/weekly-report`: Lambda Quarkus para relatorio semanal, hoje com envio de relatorio no-op.
+- `infra/environments/dev` e `infra/environments/prod`: composicoes Terraform por ambiente.
+- `infra/modules/*`: modulos Terraform para API Gateway, Lambda, DynamoDB, SNS, SES, EventBridge e CloudWatch.
+- `docs/openapi-feedback-api.yaml`: contrato OpenAPI 3.0.3 da API publica.
+- `docs/Especificacao_Tecnica.md`: especificacao ampla do desafio; contem partes ainda aspiracionais em relacao ao codigo atual.
 
-Ainda não existem no repositório:
+## Stack e Versoes
 
-- `pom.xml` raiz ou Maven wrapper.
-- módulos `apps/feedback-api`, `apps/critical-notifier`, `apps/weekly-report` com código versionado.
-- `libs/shared-kernel`.
-- pipeline `.github/workflows`.
-- testes automatizados executáveis.
-
-## Stack Planejada e Versões
-
-Stack definida pela especificação e parcialmente refletida no Terraform:
-
-- Java 21, fixado em `mise.toml` e runtime Lambda `java21` em `infra/modules/lambda/variables.tf`.
-- Quarkus para Lambdas Java, com handler padrão `io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest`.
-- AWS Lambda, API Gateway HTTP API, DynamoDB, SNS, SES, EventBridge/CloudWatch Events e CloudWatch.
+- Java 21, fixado em `mise.toml` e usado por `maven.compiler.release=21`.
+- Maven Wrapper versionado em `mvnw` e `.mvn/wrapper/maven-wrapper.properties`.
+- Quarkus `3.15.3`, via BOM no `pom.xml` raiz.
+- Lambda runtime Terraform: `java21` em `infra/modules/lambda/variables.tf`.
 - Terraform `>= 1.6.0` com provider AWS `~> 5.0`.
-- fakecloud para emular serviços AWS localmente.
-- Ferramentas previstas, ainda não configuradas em build executável: Maven 3.9+, JUnit 5, Mockito, RestAssured e Testcontainers.
+- fakecloud local em `localhost:4566` para DynamoDB, SNS, SES, EventBridge, Lambda, logs, CloudWatch, IAM e API Gateway.
+- Testes com JUnit 5, Quarkus JUnit e RestAssured onde aplicavel.
 
-## Execução Local Disponível Hoje
+Dependencias relevantes por modulo:
+
+- `feedback-api`: `quarkus-amazon-lambda-http`, `quarkus-rest`, `quarkus-rest-jackson`, `quarkus-hibernate-validator`, `shared-kernel`, `rest-assured` em testes.
+- `critical-notifier`: `quarkus-amazon-lambda`, `quarkus-jackson`, `shared-kernel`.
+- `weekly-report`: `quarkus-amazon-lambda`, `quarkus-jackson`, `shared-kernel`.
+- `shared-kernel`: JUnit 5 e `jboss-logmanager` para testes.
+
+## Execucao Local
+
+Instalar/selecionar Java com `mise`, quando usado:
+
+```bash
+mise install
+```
 
 Subir o emulador AWS local:
 
@@ -40,22 +47,56 @@ Subir o emulador AWS local:
 docker compose up -d
 ```
 
-O serviço `fakecloud` expõe `localhost:4566` e habilita DynamoDB, SNS, SES, EventBridge, Lambda, logs, CloudWatch, IAM e API Gateway. O estado local fica em `.fakecloud/`, que é ignorado pelo Git.
+O estado local do fakecloud fica em `.fakecloud/`, ignorado pelo Git.
 
-Configuração AWS local esperada para comandos manuais:
+Executar a API em modo dev Quarkus:
 
 ```bash
-export AWS_ACCESS_KEY_ID=test
-export AWS_SECRET_ACCESS_KEY=test
-export AWS_REGION=us-east-1
-export AWS_ENDPOINT_URL=http://localhost:4566
+./mvnw -pl apps/feedback-api quarkus:dev
 ```
+
+Exemplo de chamada local da API:
+
+```bash
+curl -i -X POST http://localhost:8080/avaliacao \
+  -H 'Content-Type: application/json' \
+  -d '{"descricao":"A aula estava confusa e nao consegui acompanhar o conteudo.","nota":2}'
+```
+
+Health check local:
+
+```bash
+curl -i http://localhost:8080/health
+```
+
+Observacao: a API atual persiste em memoria (`InMemoryFeedbackGateway`) e apenas loga a publicacao critica (`NoOpCriticalFeedbackPublisher`). Rodar localmente a API nao exercita DynamoDB nem SNS.
+
+## Comandos de Build e Teste
+
+Comandos Maven disponiveis no estado atual:
+
+```bash
+./mvnw test
+./mvnw -pl libs/shared-kernel test
+./mvnw -pl apps/feedback-api test
+./mvnw -pl apps/critical-notifier test
+./mvnw -pl apps/weekly-report test
+./mvnw clean package
+```
+
+O build Quarkus deve gerar os artefatos Lambda esperados pelo Terraform:
+
+- `apps/feedback-api/target/function.zip`
+- `apps/critical-notifier/target/function.zip`
+- `apps/weekly-report/target/function.zip`
+
+Nao ha configuracao de lint, formatador, cobertura ou pipeline CI/CD versionada.
 
 ## Terraform
 
-Ambiente de desenvolvimento usa fakecloud via endpoints configurados em `infra/environments/dev/versions.tf`.
+`dev` aponta o provider AWS para o fakecloud em `infra/environments/dev/versions.tf`. `prod` usa provider AWS real sem endpoints locais.
 
-Comandos úteis:
+Comandos uteis:
 
 ```bash
 terraform -chdir=infra/environments/dev init
@@ -63,147 +104,161 @@ terraform -chdir=infra/environments/dev validate
 terraform -chdir=infra/environments/dev plan -var="admin_email_to=admin@example.com" -var="email_from=no-reply@example.com"
 ```
 
-O ambiente `prod` usa o provider AWS sem endpoints locais. Variáveis obrigatórias em `dev` e `prod`:
+Variaveis obrigatorias em `dev` e `prod`:
 
 - `admin_email_to`
 - `email_from`
 
-Variáveis e padrões importantes:
+Padroes importantes:
 
 - `aws_region`: `us-east-1`.
 - `log_level`: `INFO`.
 - `weekly_report_schedule_expression`: `cron(59 23 ? * SUN *)`.
 - `lambda_handler`: `io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest`.
-- artefatos Lambda esperados: `apps/feedback-api/target/function.zip`, `apps/critical-notifier/target/function.zip`, `apps/weekly-report/target/function.zip`.
-- CORS documental de produção até existir domínio real: `https://feedback.example.com`.
-- `ADMIN_EMAIL_TO` documental até existir caixa real: `admin-feedback@example.com`.
+- CORS em `dev`: `[*]`.
+- CORS em `prod`: lista vazia por padrao; exige dominios explicitos antes de uso por browser.
 
-Risco atual: `terraform plan/apply` para Lambdas exige que os zips existam, pois o módulo usa `filebase64sha256(var.artifact_path)`. Enquanto a aplicação não for empacotada, o plano pode falhar nesses pontos.
+O modulo Lambda calcula `filebase64sha256(var.artifact_path)`, entao `plan/apply` completo falha se os zips nao existirem.
 
-O cron UTC atual é aceitável no MVP. Migração para EventBridge Scheduler com timezone fica fora do escopo até `America/Sao_Paulo` virar requisito obrigatório.
+## Estrutura Tecnica
 
-Recomendação operacional para pipeline futuro: gerar `terraform plan` e exigir aprovação manual antes de `apply`, principalmente em `prod`. Auto-apply só deve ser considerado para `dev` controlado.
+```text
+.
++-- apps/
+|   +-- feedback-api/
+|   |   +-- src/main/java/br/com/fiap/feedbackapi/{core,infra}/
+|   +-- critical-notifier/
+|   |   +-- src/main/java/br/com/fiap/criticalnotifier/{core,infra}/
+|   +-- weekly-report/
+|       +-- src/main/java/br/com/fiap/weeklyreport/{core,infra}/
++-- libs/shared-kernel/
+|   +-- src/main/java/br/com/fiap/feedbackplatform/shared/
++-- infra/
+|   +-- environments/{dev,prod}/
+|   +-- modules/{api-gateway,cloudwatch,dynamodb,eventbridge,lambda,ses,sns}/
++-- docs/
+```
 
-## Recursos de Infraestrutura Modelados
+Padrao de camadas observado no codigo Java:
 
-`infra/environments/*/main.tf` instancia:
+- `core/domain`: records e tipos de dominio.
+- `core/dto`: comandos de caso de uso quando necessario.
+- `core/gateway`: ports/interfaces de saida.
+- `core/usecase`: casos de uso com regra de aplicacao.
+- `infra/http`: recursos REST da API.
+- `infra/lambda`: handlers Lambda diretos.
+- `infra/gateway/*`: adapters de infraestrutura; hoje `InMemory` ou `NoOp`.
+- `infra/config`: produtores/configuracao CDI.
 
-- DynamoDB `feedbacks-<environment>`.
-- SNS `feedback-critical-topic-<environment>`.
-- SES identities para `email_from` e, quando diferente, `admin_email_to`.
-- Lambda `feedback-api-<environment>`.
-- Lambda `critical-notifier-<environment>`.
-- Lambda `weekly-report-<environment>`.
-- HTTP API Gateway com stage igual ao ambiente.
-- EventBridge/CloudWatch Events para relatório semanal.
-- alarmes e dashboard CloudWatch.
+## API Publica
 
-Recurso planejado, ainda não modelado no Terraform: DynamoDB auxiliar `feedback-processing-control-<environment>` para idempotência de notificações e relatórios.
+Contrato versionado: `docs/openapi-feedback-api.yaml`.
 
-Permissões IAM são separadas por Lambda:
+Endpoints implementados em `apps/feedback-api`:
 
-- `feedback-api`: `dynamodb:PutItem` e `sns:Publish`.
-- `critical-notifier`: `ses:SendEmail` e `ses:SendRawEmail`.
-- `weekly-report`: `dynamodb:Query`, `dynamodb:Scan`, `ses:SendEmail` e `ses:SendRawEmail`.
+- `POST /avaliacao`: valida `descricao` e `nota`, classifica urgencia, gera `id` e `dataEnvio`, salva em memoria e retorna `201`.
+- `GET /health`: retorna `{ "status": "UP" }`.
 
-## API Pública
-
-Contrato versionado em `docs/openapi-feedback-api.yaml`.
-
-Endpoints definidos:
-
-- `POST /avaliacao`: registra feedback.
-- `GET /health`: verifica disponibilidade da aplicação.
-
-`POST /avaliacao` recebe:
+Request valido:
 
 ```json
 {
-  "descricao": "A aula estava confusa e não consegui acompanhar o conteúdo.",
+  "descricao": "A aula estava confusa e nao consegui acompanhar o conteudo.",
   "nota": 2
 }
 ```
 
-Resposta `201` esperada:
+Resposta atual esperada:
 
 ```json
 {
-  "id": "018f7e7a-5c45-7a24-8de1-f8ff2b7d4f91",
+  "id": "uuid-gerado",
   "status": "CREATED",
   "urgencia": "CRITICA",
-  "dataEnvio": "2026-05-31T13:00:00Z"
+  "dataEnvio": "timestamp-utc"
 }
 ```
 
-O header `X-Correlation-Id` é opcional na entrada e deve ser retornado na resposta.
+Validacoes implementadas por Bean Validation:
 
-## Persistência
+- `descricao`: `@NotBlank`, tamanho minimo 10 e maximo 1000.
+- `nota`: `@NotNull`, minimo 0 e maximo 10.
 
-Tabela DynamoDB definida em `infra/modules/dynamodb/main.tf`:
+Lacuna atual: o OpenAPI documenta `X-Correlation-Id` e respostas de erro padronizadas, mas o codigo HTTP ainda nao implementa propagacao/retorno de correlation id nem modelo customizado de erro.
 
-- tabela: nome configurável, usado como `feedbacks-<environment>` nos ambientes.
-- billing: `PAY_PER_REQUEST`.
-- partition key: `id` string.
+## Persistencia e Integracoes
+
+Persistencia planejada no Terraform:
+
+- DynamoDB `feedbacks-<environment>`.
+- Billing `PAY_PER_REQUEST`.
+- Chave primaria `id` string.
 - GSI `dataEnvio-index` com partition key `periodo` e sort key `dataEnvio`.
-- server-side encryption habilitada.
-- point-in-time recovery habilitado.
+- Point-in-time recovery e server-side encryption habilitados.
 
-Item lógico especificado:
+Persistencia implementada no codigo:
 
-- `id`: UUID gerado pelo backend.
-- `descricao`: texto do estudante.
-- `nota`: inteiro de 0 a 10.
-- `urgencia`: `CRITICA`, `MEDIA` ou `BAIXA`.
-- `dataEnvio`: timestamp ISO-8601 gerado pelo backend.
-- `periodo`: semana ISO fechada no formato `AAAA-Www`, usada para relatório semanal.
-- `correlationId`: rastreamento de requisição.
+- `feedback-api` usa `InMemoryFeedbackGateway` com `ConcurrentLinkedQueue`.
+- O dominio `Feedback` contem `id`, `descricao`, `nota`, `urgencia` e `dataEnvio`.
+- O campo `periodo`, necessario para o GSI e relatorio semanal, ainda nao existe no modelo Java.
 
-Tabela auxiliar planejada para idempotência:
+Integracoes planejadas no Terraform:
 
-- nome: `feedback-processing-control-<environment>`.
-- uso: registrar operações concluídas antes de enviar e-mails assíncronos.
-- chave sugerida: string de controle, por exemplo `critical-notification#<feedbackId>` ou `weekly-report#<periodo>`.
-- escrita: condicional, falhando quando a chave já existir para evitar reenvio.
-- TTL: fora do MVP.
-- reenvio manual forçado de relatório: fora do MVP.
+- API Gateway HTTP API integra com Lambda `feedback-api`.
+- SNS `feedback-critical-topic-<environment>` invoca Lambda `critical-notifier`.
+- SES valida identidades `email_from` e `admin_email_to` quando diferentes.
+- EventBridge/CloudWatch Events aciona `weekly-report` semanalmente.
 
-## Observabilidade
+Integracoes implementadas no codigo:
 
-Requisitos da especificação:
+- Publicacao SNS ainda e `NoOpCriticalFeedbackPublisher` com log.
+- Envio SES de notificacao critica ainda e `NoOpEmailGateway` com log.
+- Envio SES de relatorio semanal ainda e `NoOpReportEmailGateway` com log.
+- `weekly-report` ainda nao consulta DynamoDB nem calcula metricas; apenas delega o request para o gateway de e-mail.
 
-- logs estruturados em JSON.
-- `correlationId` em requisições, eventos, persistência e logs.
-- erros com contexto suficiente, sem expor dados sensíveis.
-- métricas de negócio no namespace `FeedbackPlatform`.
+## Observabilidade e Erros
 
-Infraestrutura já modelada:
+Infraestrutura modelada:
 
-- log group por Lambda com retenção padrão de 14 dias.
-- alarmes para `Errors` e `Throttles` de cada Lambda.
-- alarmes para `NotificationFailureCount` e `WeeklyReportFailureCount`.
-- dashboard `feedback-platform-<environment>` com invocações, erros e métricas de negócio.
+- Log group por Lambda com retencao padrao de 14 dias.
+- Alarmes CloudWatch para `Errors` e `Throttles` de cada Lambda.
+- Alarmes para metricas customizadas `NotificationFailureCount` e `WeeklyReportFailureCount`.
+- Dashboard `feedback-platform-<environment>` com metricas de Lambda e negocio.
 
-## Testes e Qualidade
+Codigo atual:
 
-Não há testes executáveis hoje. A especificação prevê:
+- Adapters no-op usam `org.jboss.logging.Logger`.
+- Nao ha logs estruturados JSON configurados.
+- Nao ha publicacao de metricas customizadas `FeedbackPlatform`.
+- Tratamento de erros customizado ainda nao foi implementado; a API depende do comportamento padrao do Quarkus/Bean Validation.
 
-- unitários para validação, classificação de urgência, domínio e erros.
-- integração com fakecloud/Testcontainers para DynamoDB, SNS, SES e relatório.
-- contrato/API com RestAssured.
-- E2E cobrindo feedback crítico, persistência, SNS, e-mail e relatório semanal.
+## Testes Visiveis
 
-Comandos Maven como `./mvnw test`, `./mvnw verify` e `./mvnw clean package` ainda não são executáveis até a criação da fundação Maven.
+Testes versionados:
 
-## Restrições, Riscos e Pendências
+- `UrgenciaClassifierTest`: cobre limites de classificacao e rejeicao de notas fora de 0..10.
+- `AvaliacaoResourceTest`: cobre criacao minima de avaliacao critica via HTTP.
+- `HealthResourceTest`: cobre `GET /health`.
+- `NotifyCriticalFeedbackUseCaseTest`: cobre delegacao para gateway de e-mail.
+- `GenerateWeeklyReportUseCaseTest`: cobre delegacao para gateway de relatorio.
 
-- Criar `pom.xml`, Maven wrapper, módulos de aplicação e `libs/shared-kernel`.
-- Garantir que o build gere os zips nos caminhos esperados pelo Terraform.
-- Implementar contrato OpenAPI sem usar a forma acentuada `/avaliação`.
-- Criar a tabela auxiliar `feedback-processing-control-<environment>` no Terraform.
-- Implementar idempotência de notificação crítica por `feedbackId` e do relatório semanal por `periodo` usando a tabela auxiliar.
-- Enviar relatório semanal mesmo sem feedbacks, com contadores zerados.
-- Configurar CI/CD real em `.github/workflows`.
-- Validar se fakecloud cobre todos os recursos Terraform usados, especialmente API Gateway HTTP API, Lambda e CloudWatch Dashboard.
-- Substituir o placeholder de CORS `https://feedback.example.com` pelo domínio real de produção quando existir; `prod` não deve usar `*`.
-- Manter endpoint público sem autenticação apenas para o escopo acadêmico; para produção real, avaliar API key, JWT ou Cognito.
-- Substituir o placeholder `admin-feedback@example.com` pelo e-mail ou grupo administrativo real quando existir.
+Lacunas de qualidade:
+
+- Sem testes de integracao com fakecloud/Testcontainers.
+- Sem teste de contrato OpenAPI automatizado.
+- Sem cobertura de erros HTTP customizados.
+- Sem testes para DynamoDB, SNS, SES ou EventBridge reais/emulados.
+
+## Restricoes, Riscos e Pendencias
+
+- Implementar adapters reais para DynamoDB, SNS e SES.
+- Adicionar `periodo` ao modelo persistido e gerar semana ISO para o relatorio.
+- Implementar consulta DynamoDB do `weekly-report`, preferencialmente pelo GSI `dataEnvio-index`.
+- Definir e versionar o contrato do evento SNS de feedback critico.
+- Implementar `X-Correlation-Id` de ponta a ponta.
+- Implementar respostas de erro no formato do OpenAPI.
+- Implementar metricas customizadas esperadas pelos alarmes/dashboard.
+- Avaliar DLQ/retry para fluxos assincronos; nao ha DLQ hoje.
+- Definir dominio real de CORS para producao.
+- Definir e-mails reais verificados no SES para `email_from` e `admin_email_to`.
+- Criar pipeline CI/CD em `.github/workflows`, se necessario.

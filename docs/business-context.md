@@ -1,101 +1,142 @@
-# Contexto de Negócio
+# Contexto de Negocio
 
 ## Objetivo do Sistema
 
-A Plataforma de Feedback Educacional existe para coletar avaliações de estudantes, identificar rapidamente feedbacks críticos e consolidar dados semanais para acompanhamento administrativo.
+A Plataforma de Feedback Educacional coleta avaliacoes de estudantes, classifica automaticamente a urgencia do feedback e apoia a administracao com notificacoes para casos criticos e relatorios semanais.
 
-O produto atende ao Tech Challenge IV e deve demonstrar uma solução serverless com API pública, classificação automática, persistência, notificação e relatório.
+O repositorio atende ao Tech Challenge IV. A solucao demonstra uma arquitetura serverless com API publica, persistencia planejada em DynamoDB, notificacao assincrona planejada via SNS/SES e relatorio semanal planejado via EventBridge/SES.
 
 ## Atores
 
-- Estudante ou cliente da API: envia feedback com descrição e nota.
-- Administrador educacional: recebe e-mails sobre feedbacks críticos e relatório semanal.
-- Equipe de desenvolvimento: implementa e opera a solução com Java, Quarkus, AWS/fakecloud e Terraform.
-- Agente de código: usa a documentação versionada e `tasks/` para retomar implementação sem reexplorar o projeto.
+- Estudante ou cliente da API: envia avaliacao com `descricao` e `nota`.
+- Administrador educacional: deve receber e-mails de feedback critico e relatorio semanal.
+- Equipe de desenvolvimento/operacao: evolui os modulos Java, Terraform e contratos.
+- Agente de codigo: usa esta documentacao para retomar o trabalho sem redescobrir estrutura e decisoes.
 
-## Vocabulário do Domínio
+## Vocabulario do Dominio
 
-- Avaliação ou feedback: registro enviado por estudante contendo `descricao` e `nota`.
-- Nota: valor inteiro de 0 a 10 que representa percepção do estudante.
-- Urgência: classificação derivada automaticamente da nota.
-- Feedback crítico: avaliação com urgência `CRITICA`, que exige notificação administrativa.
-- Período: semana ISO-8601 no formato `AAAA-Www`, derivada de `dataEnvio` para consulta do relatório semanal.
-- Correlation ID: identificador de rastreamento entre API, logs, persistência e eventos.
+- Avaliacao ou feedback: registro textual enviado por estudante sobre uma aula/experiencia.
+- `descricao`: texto do feedback, entre 10 e 1000 caracteres no contrato atual.
+- `nota`: inteiro de 0 a 10.
+- Urgencia: classificacao derivada da nota, com valores `CRITICA`, `MEDIA` ou `BAIXA`.
+- Feedback critico: avaliacao com urgencia `CRITICA`; deve acionar notificacao administrativa.
+- `dataEnvio`: timestamp gerado pelo backend.
+- `periodo`: semana ISO no formato `AAAA-Www`, planejada para agrupar relatorios semanais; ainda nao existe no modelo Java atual.
+- `correlationId`: identificador de rastreio documentado no OpenAPI; ainda nao esta implementado no codigo.
 
-## Regras de Negócio Verificáveis
+## Regras de Negocio Verificaveis
 
-Regras extraídas de `docs/Especificacao_Tecnica.md` e `docs/openapi-feedback-api.yaml`:
+Regras implementadas no codigo e/ou contrato OpenAPI:
 
-- `descricao` é obrigatória.
-- `descricao` deve ter no mínimo 10 e no máximo 1000 caracteres.
-- `nota` é obrigatória.
-- `nota` deve ser número inteiro entre 0 e 10.
-- notas 0, 1, 2 e 3 geram urgência `CRITICA`.
-- notas 4, 5 e 6 geram urgência `MEDIA`.
-- notas 7, 8, 9 e 10 geram urgência `BAIXA`.
-- todo feedback `CRITICA` deve publicar evento SNS para notificação administrativa.
-- `dataEnvio` deve ser gerada pelo backend, não pelo cliente.
-- `id` deve ser gerado pelo backend em formato UUID.
-- `periodo` deve ser gerado pelo backend a partir de `dataEnvio`.
-- erros devem seguir resposta padronizada com `code`, `message`, `correlationId` e `details`.
+- `POST /avaliacao` e o endpoint oficial de entrada; a forma acentuada do caminho nao deve ser usada.
+- `descricao` e obrigatoria.
+- `descricao` deve ter no minimo 10 e no maximo 1000 caracteres.
+- `nota` e obrigatoria.
+- `nota` deve estar entre 0 e 10.
+- notas 0 a 3 geram urgencia `CRITICA`.
+- notas 4 a 6 geram urgencia `MEDIA`.
+- notas 7 a 10 geram urgencia `BAIXA`.
+- `id` e gerado pelo backend como UUID.
+- `dataEnvio` e gerada pelo backend usando relogio UTC.
+- feedback `CRITICA` passa pelo port `CriticalFeedbackPublisher`.
+
+Regras documentadas/planejadas, mas ainda incompletas no codigo:
+
+- Todo feedback deve ser persistido em DynamoDB.
+- Todo feedback `CRITICA` deve publicar evento SNS para `critical-notifier`.
+- Notificacao critica deve enviar e-mail via SES para `ADMIN_EMAIL_TO`.
+- Relatorio semanal deve consultar feedbacks da semana, calcular indicadores e enviar e-mail administrativo.
+- `periodo` deve ser persistido para consulta eficiente do relatorio.
+- Erros de API devem seguir o modelo OpenAPI com `code`, `message`, `correlationId` e `details`.
+- `X-Correlation-Id` deve ser propagado entre API, eventos, logs e respostas.
 
 ## Jornada Principal: Registro de Feedback
 
-1. Estudante envia `POST /avaliacao` com `descricao` e `nota`.
-2. Sistema valida o payload.
-3. Sistema classifica urgência automaticamente.
-4. Sistema persiste o feedback.
-5. Se a urgência for `CRITICA`, sistema dispara notificação assíncrona.
-6. Cliente recebe `201` com os dados gerados.
+Estado implementado hoje:
 
-## Jornada Administrativa: Notificação Crítica
+1. Cliente envia `POST /avaliacao` com `descricao` e `nota`.
+2. API valida campos obrigatorios, tamanho da descricao e faixa da nota.
+3. Sistema classifica urgencia pela nota.
+4. Sistema cria `id` e `dataEnvio`.
+5. Sistema salva o feedback em memoria.
+6. Se a urgencia for `CRITICA`, sistema chama publisher critico no-op.
+7. Cliente recebe `201` com `id`, `status`, `urgencia` e `dataEnvio`.
 
-1. Um feedback com nota de 0 a 3 é registrado.
-2. Sistema publica evento de feedback crítico.
-3. Lambda de notificação envia e-mail para o administrador.
-4. E-mail deve conter ao menos descrição, urgência e data de envio.
+Jornada esperada quando as integracoes forem concluidas:
 
-## Jornada Administrativa: Relatório Semanal
+1. O feedback e salvo em DynamoDB.
+2. Feedback critico publica evento SNS.
+3. O fluxo de notificacao ocorre fora da latencia da API.
 
-1. Agendamento semanal aciona o processamento.
-2. Sistema busca feedbacks da semana.
-3. Sistema calcula média geral das notas.
-4. Sistema calcula quantidade por dia e por urgência.
-5. Sistema lista feedbacks resumidos e destaca críticos.
-6. Administrador recebe o relatório por e-mail.
+## Jornada Administrativa: Notificacao Critica
 
-## Restrições de Negócio e Operação
+Objetivo de negocio: reduzir o tempo ate a administracao perceber feedbacks com notas de 0 a 3.
 
-- O endpoint oficial do projeto é `POST /avaliacao`, sem acento, para evitar problemas de encoding em URLs e integrações.
-- Para o escopo atual do Tech Challenge, o endpoint pode permanecer público com throttling no API Gateway e CORS controlado; autenticação, API key, JWT ou Cognito ficam como recomendação para produção real.
-- Produção deve restringir CORS a domínios autorizados; o padrão `[*]` é apenas para dev/local. Enquanto não houver domínio real definido, usar `https://feedback.example.com` como placeholder documental de produção.
-- Dados sensíveis não devem aparecer em logs, métricas ou alarmes.
-- Remetente e destinatários dependem de validação SES, especialmente em sandbox.
-- Feedback crítico deve ser notificado por componente assíncrono, não diretamente pela API.
-- Para o MVP acadêmico, a postura de privacidade é simples: orientar que `descricao` não contenha dados pessoais e evitar logar descrições completas. Política formal de retenção, anonimização, consentimento ou TTL fica fora do MVP.
+Estado atual:
 
-## Critérios de Aceite de Negócio
+- O use case `NotifyCriticalFeedbackUseCase` existe.
+- O handler `CriticalNotifierHandler` aceita `feedbackId` e `correlationId` em input simples.
+- O gateway de e-mail e no-op e apenas registra log.
 
-- API aceita feedback válido e retorna `201`.
-- API rejeita payload inválido com erro padronizado.
-- Feedback é persistido.
-- Feedback com nota 0 a 3 gera notificação crítica.
-- Relatório semanal é executado automaticamente.
-- Logs estruturados e alarmes básicos estão disponíveis.
-- Deploy é reproduzível via Terraform.
-- Contrato OpenAPI fica versionado no repositório.
+Estado esperado:
 
-## Recomendações para Dúvidas de Negócio
+- Receber evento de feedback critico vindo do SNS.
+- Enviar e-mail operacional com identificador do feedback e contexto suficiente para acao administrativa.
+- Evitar duplicidade em retries quando idempotencia for implementada.
 
-- Autenticação: manter fora do MVP acadêmico; para produção real, exigir algum controle de acesso além de CORS e throttling.
-- CORS de produção: usar `https://feedback.example.com` como placeholder até existir domínio real; não usar `*`.
-- E-mails críticos: usar tom objetivo e operacional, contendo no mínimo `feedbackId`, `descricao`, `urgencia`, `nota`, `dataEnvio` e `correlationId`.
-- Relatório semanal: considerar a semana ISO fechada identificada por `periodo` no formato `AAAA-Www`; se a execução ocorrer domingo às 23h59, o relatório cobre a semana que está encerrando.
-- Relatório sem feedbacks: enviar mesmo assim, com contadores zerados, para diferenciar ausência de dados de falha do job.
-- Horário do relatório: UTC é aceitável no MVP, mantendo `cron(59 23 ? * SUN *)`; `America/Sao_Paulo` fica como melhoria futura se for exigido.
-- Destinatário administrativo: usar placeholder por enquanto, por exemplo `admin-feedback@example.com`; futuramente substituir por caixa ou grupo administrativo real, compatível com SES.
+## Jornada Administrativa: Relatorio Semanal
 
-## Perguntas Abertas Remanescentes
+Objetivo de negocio: dar visibilidade recorrente de volume, notas e criticidade dos feedbacks.
 
-- Qual domínio real substituirá `https://feedback.example.com` em produção?
-- Qual endereço ou grupo real substituirá `admin-feedback@example.com` em `prod`?
+Estado atual:
+
+- Terraform agenda a Lambda semanalmente.
+- O use case `GenerateWeeklyReportUseCase` existe.
+- O handler aceita `periodo` em input simples.
+- O gateway de relatorio e no-op e apenas registra log.
+
+Estado esperado:
+
+- Consultar feedbacks por `periodo`.
+- Calcular media das notas.
+- Calcular contagens por dia e por urgencia.
+- Destacar feedbacks criticos.
+- Enviar relatorio mesmo sem feedbacks, com contadores zerados, se essa decisao continuar valida.
+
+## Restricoes de Negocio e Operacao
+
+- Endpoint sem acento reduz risco de encoding em clientes, API Gateway e testes.
+- O MVP academico nao implementa autenticacao; isso nao deve ser interpretado como suficiente para producao real.
+- Producao deve usar CORS com origens explicitas; `*` e aceitavel apenas em `dev`.
+- E-mails dependem de identidades SES verificadas, especialmente em sandbox.
+- Descricoes de feedback podem conter texto livre; evitar logar descricoes completas ate haver politica clara de privacidade.
+- Dados sensiveis nao devem ser incluidos em metricas, alarmes ou logs.
+
+## Criterios de Aceite Visiveis
+
+Ja cobertos por testes atuais:
+
+- `GET /health` retorna `UP`.
+- `POST /avaliacao` com payload valido retorna `201`.
+- Nota 2 retorna urgencia `CRITICA` no teste HTTP.
+- Classificacao de urgencia cobre limites 0, 3, 4, 6, 7 e 10.
+- Use cases de notifier/report delegam para seus gateways.
+
+Ainda pendentes para cumprir a jornada completa:
+
+- Persistencia real em DynamoDB.
+- Publicacao real de SNS para criticos.
+- Envio real de e-mail via SES.
+- Relatorio semanal com consulta, calculo e envio.
+- Propagacao de correlation id.
+- Erros padronizados conforme OpenAPI.
+- Testes de integracao com servicos AWS emulados.
+
+## Perguntas Abertas
+
+- Qual dominio real sera permitido no CORS de producao?
+- Quais enderecos reais serao usados para `EMAIL_FROM` e `ADMIN_EMAIL_TO`?
+- O endpoint publico permanecera sem autenticacao fora do contexto academico?
+- Qual politica de privacidade/retencao se aplica ao texto livre de `descricao`?
+- O relatorio semanal deve considerar semana ISO fechada em UTC ou horario de Sao Paulo?
+- Qual conteudo minimo definitivo deve compor o e-mail critico e o relatorio semanal?
