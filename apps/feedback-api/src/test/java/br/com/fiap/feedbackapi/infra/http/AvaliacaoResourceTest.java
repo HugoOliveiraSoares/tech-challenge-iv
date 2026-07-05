@@ -17,6 +17,7 @@ class AvaliacaoResourceTest {
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(201)
+                .header(HttpHeadersName.X_CORRELATION_ID, notNullValue())
                 .body("id", notNullValue())
                 .body("status", equalTo("CREATED"))
                 .body("urgencia", equalTo("CRITICA"))
