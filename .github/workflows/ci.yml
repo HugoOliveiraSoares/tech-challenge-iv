@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  java-build-test:
+    name: Java build and tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and test with Maven
+        run: ./mvnw -B clean package
+
+  terraform-validate:
+    name: Terraform format and validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive infra
+
+      - name: Create placeholder Lambda artifacts
+        run: |
+          mkdir -p apps/feedback-api/target apps/critical-notifier/target apps/weekly-report/target
+          printf 'placeholder for terraform validate\n' > apps/feedback-api/target/function.zip
+          printf 'placeholder for terraform validate\n' > apps/critical-notifier/target/function.zip
+          printf 'placeholder for terraform validate\n' > apps/weekly-report/target/function.zip
+
+      - name: Initialize Terraform dev
+        run: terraform -chdir=infra/environments/dev init -backend=false
+
+      - name: Validate Terraform dev
+        run: terraform -chdir=infra/environments/dev validate
+
+      - name: Initialize Terraform prod
+        run: terraform -chdir=infra/environments/prod init -backend=false
+
+      - name: Validate Terraform prod
+        run: terraform -chdir=infra/environments/prod validate
+
+  openapi-validate:
+    name: OpenAPI validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate OpenAPI contract
+        run: npx --yes @apidevtools/swagger-cli@4.0.4 validate docs/openapi-feedback-api.yaml

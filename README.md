@@ -21,6 +21,26 @@ Atualmente o repositório concentra a documentação técnica, o contrato OpenAP
 
 Os documentos de referência do projeto estão disponíveis em [`docs/`](docs/), incluindo a especificação técnica e o contrato OpenAPI da API de feedback.
 
+## CI Inicial
+
+O workflow inicial de integração contínua está em [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Ele roda automaticamente em pull requests para a branch `main`, em pushes na `main` e também pode ser executado manualmente pelo GitHub Actions com `workflow_dispatch`.
+
+Nesta fase o CI valida build/testes Java, formatação e validação Terraform, além do contrato OpenAPI. Ele não executa deploy, `terraform apply`, testes de integração com serviços AWS/fakecloud nem depende de secrets AWS.
+
+Os comandos locais equivalentes são:
+
+```bash
+./mvnw -B clean package
+terraform fmt -check -recursive infra
+terraform -chdir=infra/environments/dev init -backend=false
+terraform -chdir=infra/environments/dev validate
+terraform -chdir=infra/environments/prod init -backend=false
+terraform -chdir=infra/environments/prod validate
+npx --yes @apidevtools/swagger-cli@4.0.4 validate docs/openapi-feedback-api.yaml
+```
+
+Para validar Terraform localmente sem gerar os pacotes Lambda reais, crie antes arquivos placeholder nos caminhos `apps/*/target/function.zip`, pois os módulos Lambda calculam `filebase64sha256` desses artefatos durante a validação.
+
 ## Board
 
 O acompanhamento das atividades está no GitHub Projects:
