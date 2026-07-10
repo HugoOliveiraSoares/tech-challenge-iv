@@ -1,8 +1,9 @@
-package br.com.fiap.feedbackplatform.shared;
+package br.com.fiap.feedbackplatform.shared.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import br.com.fiap.feedbackplatform.shared.exception.DomainValidationException;
 import org.junit.jupiter.api.Test;
 
 class UrgenciaClassifierTest {
@@ -26,7 +27,7 @@ class UrgenciaClassifierTest {
 
     @Test
     void rejeitaNotasForaDoIntervalo() {
-        assertThrows(IllegalArgumentException.class, () -> UrgenciaClassifier.classify(-1));
-        assertThrows(IllegalArgumentException.class, () -> UrgenciaClassifier.classify(11));
+        assertThrows(DomainValidationException.class, () -> UrgenciaClassifier.classify(-1));
+        assertThrows(DomainValidationException.class, () -> UrgenciaClassifier.classify(11));
     }
 }

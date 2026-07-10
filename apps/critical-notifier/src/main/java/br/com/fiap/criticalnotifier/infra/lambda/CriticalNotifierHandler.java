@@ -1,10 +1,11 @@
 package br.com.fiap.criticalnotifier.infra.lambda;
 
-import br.com.fiap.criticalnotifier.core.domain.CriticalFeedbackNotification;
 import br.com.fiap.criticalnotifier.core.usecase.NotifyCriticalFeedbackUseCase;
+import br.com.fiap.feedbackplatform.shared.domain.CriticalFeedbackEvent;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import jakarta.inject.Named;
+import java.util.UUID;
 
 @Named("criticalNotifier")
 public class CriticalNotifierHandler implements RequestHandler<CriticalNotifierHandler.Input, CriticalNotifierHandler.Output> {
@@ -18,7 +19,7 @@ public class CriticalNotifierHandler implements RequestHandler<CriticalNotifierH
     public Output handleRequest(Input input, Context context) {
         String feedbackId = input == null ? null : input.feedbackId();
         String correlationId = input == null ? null : input.correlationId();
-        notifyCriticalFeedbackUseCase.execute(new CriticalFeedbackNotification(feedbackId, correlationId));
+        notifyCriticalFeedbackUseCase.execute(new CriticalFeedbackEvent(UUID.fromString(feedbackId), correlationId));
         return new Output("OK");
     }
 

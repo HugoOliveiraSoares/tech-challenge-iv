@@ -1,4 +1,4 @@
 package br.com.fiap.feedbackapi.core.dto;
 
-public record CriarAvaliacaoCommand(String descricao, int nota) {
+public record CriarAvaliacaoCommand(String descricao, int nota, String correlationId) {
 }

@@ -1,11 +1,11 @@
 package br.com.fiap.feedbackapi.core.usecase;
 
-import br.com.fiap.feedbackapi.core.domain.Feedback;
 import br.com.fiap.feedbackapi.core.dto.CriarAvaliacaoCommand;
-import br.com.fiap.feedbackapi.core.gateway.CriticalFeedbackPublisher;
-import br.com.fiap.feedbackapi.core.gateway.FeedbackGateway;
-import br.com.fiap.feedbackplatform.shared.Urgencia;
-import br.com.fiap.feedbackplatform.shared.UrgenciaClassifier;
+import br.com.fiap.feedbackplatform.shared.domain.CriticalFeedbackEvent;
+import br.com.fiap.feedbackplatform.shared.domain.Feedback;
+import br.com.fiap.feedbackplatform.shared.domain.Urgencia;
+import br.com.fiap.feedbackplatform.shared.port.CriticalFeedbackPublisher;
+import br.com.fiap.feedbackplatform.shared.port.FeedbackRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Clock;
 import java.time.Instant;
@@ -13,31 +13,30 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class CriarAvaliacaoUseCase {
-    private final FeedbackGateway feedbackGateway;
+    private final FeedbackRepository feedbackRepository;
     private final CriticalFeedbackPublisher criticalFeedbackPublisher;
     private final Clock clock;
 
     public CriarAvaliacaoUseCase(
-            FeedbackGateway feedbackGateway,
+            FeedbackRepository feedbackRepository,
             CriticalFeedbackPublisher criticalFeedbackPublisher,
             Clock clock) {
-        this.feedbackGateway = feedbackGateway;
+        this.feedbackRepository = feedbackRepository;
         this.criticalFeedbackPublisher = criticalFeedbackPublisher;
         this.clock = clock;
     }
 
     public Feedback execute(CriarAvaliacaoCommand command) {
-        Urgencia urgencia = UrgenciaClassifier.classify(command.nota());
-        Feedback feedback = new Feedback(
+        Feedback feedback = Feedback.criar(
                 UUID.randomUUID(),
                 command.descricao(),
                 command.nota(),
-                urgencia,
-                Instant.now(clock));
+                Instant.now(clock),
+                command.correlationId());
 
-        feedbackGateway.save(feedback);
-        if (urgencia == Urgencia.CRITICA) {
-            criticalFeedbackPublisher.publish(feedback);
+        feedbackRepository.save(feedback);
+        if (feedback.urgencia() == Urgencia.CRITICA) {
+            criticalFeedbackPublisher.publish(CriticalFeedbackEvent.from(feedback));
         }
 
         return feedback;

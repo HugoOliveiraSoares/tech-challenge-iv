@@ -1,9 +1,9 @@
 package br.com.fiap.feedbackapi.infra.http;
 
-import br.com.fiap.feedbackapi.core.domain.Feedback;
 import br.com.fiap.feedbackapi.core.dto.CriarAvaliacaoCommand;
 import br.com.fiap.feedbackapi.core.usecase.CriarAvaliacaoUseCase;
-import br.com.fiap.feedbackplatform.shared.Urgencia;
+import br.com.fiap.feedbackplatform.shared.domain.Feedback;
+import br.com.fiap.feedbackplatform.shared.domain.Urgencia;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -30,8 +31,9 @@ public class AvaliacaoResource {
     }
 
     @POST
-    public Response criar(@Valid CriarAvaliacaoRequest request) {
-        Feedback feedback = criarAvaliacaoUseCase.execute(new CriarAvaliacaoCommand(request.descricao(), request.nota()));
+    public Response criar(@Valid CriarAvaliacaoRequest request, @HeaderParam("X-Correlation-Id") String correlationId) {
+        Feedback feedback = criarAvaliacaoUseCase.execute(
+                new CriarAvaliacaoCommand(request.descricao(), request.nota(), correlationId));
         CriarAvaliacaoResponse response = new CriarAvaliacaoResponse(
                 feedback.id(),
                 "CREATED",
