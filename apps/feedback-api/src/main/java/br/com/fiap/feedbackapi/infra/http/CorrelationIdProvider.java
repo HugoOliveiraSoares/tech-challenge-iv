@@ -8,12 +8,16 @@ public final class CorrelationIdProvider {
     private CorrelationIdProvider(){}
 
     public static String get(ContainerRequestContext requestContext){
-        var correlationId = requestContext.getProperty(CorrelationIdFilter.CORRELATION_ID);
+        var property = requestContext.getProperty(CorrelationIdFilter.CORRELATION_ID);
 
-        if(correlationId == null || correlationId.toString().isBlank()){
-            return UUID.randomUUID().toString();
+        if(property != null && !property.toString().isBlank()){
+            return property.toString();
         }
 
-        return correlationId.toString();
+        var correlationId = UUID.randomUUID().toString();
+
+        requestContext.setProperty(CorrelationIdFilter.CORRELATION_ID, correlationId);
+
+        return correlationId;
     }
 }

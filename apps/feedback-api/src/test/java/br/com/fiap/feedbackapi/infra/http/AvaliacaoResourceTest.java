@@ -25,6 +25,44 @@ class AvaliacaoResourceTest {
     }
 
     @Test
+    void deveReutilizarCorrelationIdQuandoInformadoNoHeader(){
+        given()
+                .contentType("application/json")
+                .header(HttpHeadersName.X_CORRELATION_ID, "correlation-test-123")
+                .body("""
+                  {
+                    "descricao": "Testando reutilização do X-Corrrelation-Id informado",
+                    "nota": 10
+                  }
+                """)
+                .when().post("/avaliacao")
+                .then()
+                .statusCode(201)
+                .header(HttpHeadersName.X_CORRELATION_ID, equalTo("correlation-test-123"));
+    }
+
+    @Test
+    void deveRetornar400QuandoCorrelationIdForMenorQue8Caracteres(){
+        given()
+                .contentType("application/json")
+                .header(HttpHeadersName.X_CORRELATION_ID, "123")
+                .body("""
+                  {
+                    "descricao": "Testando X-Corrrelation-Id menor que 8 caracteres",
+                    "nota": 10
+                  }
+                """)
+                .when().post("/avaliacao")
+                .then()
+                .statusCode(400)
+                .header(HttpHeadersName.X_CORRELATION_ID, equalTo("123"))
+                .body("code", equalTo("VALIDATION_ERROR"))
+                .body("correlationId", equalTo("123"))
+                .body("details[0].field", equalTo(HttpHeadersName.X_CORRELATION_ID))
+                .body("details[0].message", equalTo("tamanho permitido entre 8 e 100 caracteres"));
+    }
+
+    @Test
     void deveRetornar400QuandoJsonMalformado(){
         given()
                 .contentType("application/json")
