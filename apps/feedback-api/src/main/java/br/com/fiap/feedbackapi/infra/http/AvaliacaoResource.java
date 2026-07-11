@@ -31,7 +31,7 @@ public class AvaliacaoResource {
     }
 
     @POST
-    public Response criar(@Valid CriarAvaliacaoRequest request, @HeaderParam("X-Correlation-Id") String correlationId) {
+    public Response criar(@Valid @NotNull CriarAvaliacaoRequest request, @HeaderParam("X-Correlation-Id") String correlationId) {
         Feedback feedback = criarAvaliacaoUseCase.execute(
                 new CriarAvaliacaoCommand(request.descricao(), request.nota(), correlationId));
         CriarAvaliacaoResponse response = new CriarAvaliacaoResponse(
