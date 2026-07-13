@@ -90,7 +90,7 @@ class AvaliacaoResourceTest {
                 .statusCode(400)
                 .header(HttpHeadersName.X_CORRELATION_ID, notNullValue())
                 .body("code", equalTo("MALFORMED_JSON"))
-                .body("message", equalTo("Corpo da requisição nao é um JSON válido"))
+                .body("message", equalTo("Corpo da requisição não é um JSON válido"))
                 .body("correlationId", notNullValue())
                 .body("details", notNullValue());
     }
