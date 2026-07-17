@@ -1,8 +1,7 @@
 package br.com.fiap.feedbackapi.infra.http;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.*;
 
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
@@ -25,16 +24,16 @@ class AvaliacaoResourceTest {
     }
 
     @Test
-    void deveReutilizarCorrelationIdQuandoInformadoNoHeader(){
+    void deveReutilizarCorrelationIdQuandoInformadoNoHeader() {
         given()
                 .contentType("application/json")
                 .header(HttpHeadersName.X_CORRELATION_ID, "correlation-test-123")
                 .body("""
-                  {
-                    "descricao": "Testando reutilização do X-Correlation-Id informado",
-                    "nota": 10
-                  }
-                """)
+                          {
+                            "descricao": "Testando reutilização do X-Correlation-Id informado",
+                            "nota": 10
+                          }
+                        """)
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(201)
@@ -42,16 +41,16 @@ class AvaliacaoResourceTest {
     }
 
     @Test
-    void deveRetornar400QuandoCorrelationIdForMenorQue8Caracteres(){
+    void deveRetornar400QuandoCorrelationIdForMenorQue8Caracteres() {
         given()
                 .contentType("application/json")
                 .header(HttpHeadersName.X_CORRELATION_ID, "123")
                 .body("""
-                  {
-                    "descricao": "Testando X-Correlation-Id menor que 8 caracteres",
-                    "nota": 10
-                  }
-                """)
+                          {
+                            "descricao": "Testando X-Correlation-Id menor que 8 caracteres",
+                            "nota": 10
+                          }
+                        """)
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(400)
@@ -63,7 +62,7 @@ class AvaliacaoResourceTest {
     }
 
     @Test
-    void deveRetornar400QuandoCriarAvaliacaoRequestBodyAusente(){
+    void deveRetornar400QuandoCriarAvaliacaoRequestBodyAusente() {
         given()
                 .contentType("application/json")
                 .when().post("/avaliacao")
@@ -76,15 +75,15 @@ class AvaliacaoResourceTest {
     }
 
     @Test
-    void deveRetornar400QuandoJsonMalformado(){
+    void deveRetornar400QuandoJsonMalformado() {
         given()
                 .contentType("application/json")
                 .body("""
-                  {
-                    "descricao": "Testando Json mal formado",
-                    "nota":
-                  }
-                  """)
+                        {
+                          "descricao": "Testando Json mal formado",
+                          "nota":
+                        }
+                        """)
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(400)
@@ -96,14 +95,14 @@ class AvaliacaoResourceTest {
     }
 
     @Test
-    void deveRetornar400QuandoDescricaoAusente(){
+    void deveRetornar400QuandoDescricaoAusente() {
         given()
                 .contentType("application/json")
                 .body("""
-                  {
-                    "nota": 8
-                  }
-                  """)
+                        {
+                          "nota": 8
+                        }
+                        """)
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(400)
@@ -115,14 +114,14 @@ class AvaliacaoResourceTest {
     }
 
     @Test
-    void deveRetornar400QuandoNotaAusente(){
+    void deveRetornar400QuandoNotaAusente() {
         given()
                 .contentType("application/json")
                 .body("""
-                  {
-                    "descricao": "Testando nota ausente"
-                  }
-                  """)
+                        {
+                          "descricao": "Testando nota ausente"
+                        }
+                        """)
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(400)
@@ -134,15 +133,15 @@ class AvaliacaoResourceTest {
     }
 
     @Test
-    void deveRetornar422QuandoDescricaoCurta(){
+    void deveRetornar422QuandoDescricaoCurta() {
         given()
                 .contentType("application/json")
                 .body("""
-                  {
-                    "descricao": "Hi",
-                    "nota": 9
-                  }
-                  """)
+                        {
+                          "descricao": "Hi",
+                          "nota": 9
+                        }
+                        """)
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(422)
@@ -155,15 +154,15 @@ class AvaliacaoResourceTest {
     }
 
     @Test
-    void deveRetornar422QuandoNotaMenorQueZero(){
+    void deveRetornar422QuandoNotaMenorQueZero() {
         given()
                 .contentType("application/json")
                 .body("""
-                  {
-                    "descricao": "Testando nota menor que zero",
-                    "nota": -1
-                  }
-                  """)
+                        {
+                          "descricao": "Testando nota menor que zero",
+                          "nota": -1
+                        }
+                        """)
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(422)
@@ -176,15 +175,15 @@ class AvaliacaoResourceTest {
     }
 
     @Test
-    void deveRetornar422QuandoNotaMaiorQueDez(){
+    void deveRetornar422QuandoNotaMaiorQueDez() {
         given()
                 .contentType("application/json")
                 .body("""
-                  {
-                    "descricao": "Testando nota maior que dez",
-                    "nota": 11
-                  }
-                  """)
+                        {
+                          "descricao": "Testando nota maior que dez",
+                          "nota": 11
+                        }
+                        """)
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(422)
@@ -194,5 +193,25 @@ class AvaliacaoResourceTest {
                 .body("correlationId", notNullValue())
                 .body("details[0].field", equalTo("nota"))
                 .body("details[0].message", notNullValue());
+    }
+
+    @Test
+    void deveRetornar422QuandoDescricaoNormalizadaForCurta() {
+        given()
+                .contentType("application/json")
+                .body("""
+                        {
+                          "descricao": "    curta        ",
+                          "nota": 10
+                        }
+                        """)
+                .when().post("/avaliacao")
+                .then()
+                .statusCode(422)
+                .header(HttpHeadersName.X_CORRELATION_ID, notNullValue())
+                .body("code", equalTo("BUSINESS_RULE_ERROR"))
+                .body("message", equalTo("Descrição deve ter pelo menos 10 caracteres."))
+                .body("correlationId", notNullValue())
+                .body("details", empty());
     }
 }

@@ -25,7 +25,7 @@ class CorrelationIdPropagationTest {
     CriarAvaliacaoUseCase criarAvaliacaoUseCase;
 
     @Test
-    void devePropagarCorrelationIdGeradoParaOCommand(){
+    void devePropagarCorrelationIdGeradoParaOCommand() {
         when(criarAvaliacaoUseCase.execute(any(CriarAvaliacaoCommand.class)))
                 .thenAnswer(invocation -> {
                     CriarAvaliacaoCommand command = invocation.getArgument(0);
@@ -40,11 +40,11 @@ class CorrelationIdPropagationTest {
         var correlationIdResponse = given()
                 .contentType("application/json")
                 .body("""
-                {
-                  "descricao": "Testando propagação do correlation id gerado",
-                  "nota": 10
-                }
-                """)
+                        {
+                          "descricao": "Testando propagação do correlation id gerado",
+                          "nota": 10
+                        }
+                        """)
                 .when()
                 .post("/avaliacao")
                 .then()
@@ -65,7 +65,7 @@ class CorrelationIdPropagationTest {
     }
 
     @Test
-    void devePropagarCorrelationIdInformadoNoHeaderParaOCommand(){
+    void devePropagarCorrelationIdInformadoNoHeaderParaOCommand() {
         when(criarAvaliacaoUseCase.execute(any(CriarAvaliacaoCommand.class)))
                 .thenAnswer(invocation -> {
                     CriarAvaliacaoCommand command = invocation.getArgument(0);
@@ -81,11 +81,11 @@ class CorrelationIdPropagationTest {
                 .contentType("application/json")
                 .header(HttpHeadersName.X_CORRELATION_ID, "correlation-test-123")
                 .body("""
-                {
-                  "descricao": "Testando propagação correlation id informado no header",
-                  "nota": 10
-                }
-                """)
+                        {
+                          "descricao": "Testando propagação correlation id informado no header",
+                          "nota": 10
+                        }
+                        """)
                 .when()
                 .post("/avaliacao")
                 .then()

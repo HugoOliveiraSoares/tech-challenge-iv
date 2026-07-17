@@ -19,18 +19,18 @@ class InternalErrorTest {
     CriarAvaliacaoUseCase criarAvaliacaoUseCase;
 
     @Test
-    void deveRetornar500QuandoOcorrerErroInesperado(){
+    void deveRetornar500QuandoOcorrerErroInesperado() {
         when(criarAvaliacaoUseCase.execute(any(CriarAvaliacaoCommand.class)))
                 .thenThrow(new IllegalStateException("Erro inesperado"));
 
         given()
                 .contentType("application/json")
                 .body("""
-                 {
-                    "descricao": "Testando erro inesperado na aplicacao",
-                    "nota": 10
-                 }
-                 """)
+                        {
+                           "descricao": "Testando erro inesperado na aplicacao",
+                           "nota": 10
+                        }
+                        """)
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(500)

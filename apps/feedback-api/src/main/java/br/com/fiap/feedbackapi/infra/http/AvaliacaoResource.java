@@ -47,8 +47,8 @@ public class AvaliacaoResource {
     }
 
     public record CriarAvaliacaoRequest(
-            @NotBlank @Size(min = 10, max = 1000) String descricao,
-            @NotNull @Min(0) @Max(10) Integer nota) {
+            @NotBlank @Size(min = 10, max = 1000, message = "Descrição deve ter entre 10 e 1000 caracteres") String descricao,
+            @NotNull @Min(value = 0, message = "nota não pode ser menor que 0") @Max(value = 10, message = "nota não pode ser maior que 10") Integer nota) {
     }
 
     public record CriarAvaliacaoResponse(UUID id, String status, Urgencia urgencia, Instant dataEnvio) {
