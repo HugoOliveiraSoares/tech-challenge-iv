@@ -11,6 +11,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import jakarta.ws.rs.*;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.time.Instant;
@@ -20,6 +22,9 @@ import java.util.UUID;
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class AvaliacaoResource {
+    @Context
+    ContainerRequestContext requestContext;
+
     private final CriarAvaliacaoUseCase criarAvaliacaoUseCase;
 
     public AvaliacaoResource(CriarAvaliacaoUseCase criarAvaliacaoUseCase) {
@@ -27,7 +32,9 @@ public class AvaliacaoResource {
     }
 
     @POST
-    public Response criar(@Valid @NotNull CriarAvaliacaoRequest request, @HeaderParam("X-Correlation-Id") String correlationId) {
+    public Response criar(@Valid @NotNull CriarAvaliacaoRequest request) {
+
+        var correlationId = CorrelationIdProvider.get(requestContext);
         Feedback feedback = criarAvaliacaoUseCase.execute(
                 new CriarAvaliacaoCommand(request.descricao(), request.nota(), correlationId));
         CriarAvaliacaoResponse response = new CriarAvaliacaoResponse(
