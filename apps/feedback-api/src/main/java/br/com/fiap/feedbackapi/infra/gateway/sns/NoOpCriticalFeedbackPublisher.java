@@ -11,6 +11,8 @@ public class NoOpCriticalFeedbackPublisher implements CriticalFeedbackPublisher 
 
     @Override
     public void publish(CriticalFeedbackEvent event) {
-        LOGGER.infof("Critical feedback publishing is not implemented yet. feedbackId=%s", event.feedbackId());
+        LOGGER.infof("Critical feedback publishing is not implemented yet. feedbackId=%s correlationId=%s",
+                event.feedbackId(),
+                event.correlationId());
     }
 }

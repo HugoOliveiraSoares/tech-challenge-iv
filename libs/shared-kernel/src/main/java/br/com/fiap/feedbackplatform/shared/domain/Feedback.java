@@ -56,22 +56,22 @@ public record Feedback(
 
     private static void validarId(UUID id) {
         if (id == null) {
-            throw new DomainValidationException("Id do feedback e obrigatorio.");
+            throw new DomainValidationException("Id do feedback é obrigatório.");
         }
     }
 
     private static String validarDescricao(String descricao) {
         if (descricao == null || descricao.isBlank()) {
-            throw new DomainValidationException("Descricao e obrigatoria.");
+            throw new DomainValidationException("Descrição é obrigatória.");
         }
 
         String descricaoNormalizada = descricao.trim();
         if (descricaoNormalizada.length() < 10) {
-            throw new DomainValidationException("Descricao deve ter pelo menos 10 caracteres.");
+            throw new DomainValidationException("Descrição deve ter pelo menos 10 caracteres.");
         }
 
         if (descricaoNormalizada.length() > 1000) {
-            throw new DomainValidationException("Descricao deve ter no maximo 1000 caracteres.");
+            throw new DomainValidationException("Descrição deve ter no máximo 1000 caracteres.");
         }
 
         return descricaoNormalizada;
