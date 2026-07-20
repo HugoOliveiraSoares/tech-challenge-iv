@@ -1,7 +1,14 @@
 data "aws_caller_identity" "current" {}
 
+data "archive_file" "feedback_api_fakecloud" {
+  type        = "zip"
+  source_dir  = "../../../apps/feedback-api/fakecloud"
+  output_path = "${path.module}/.terraform/feedback-api-fakecloud.zip"
+}
+
 locals {
-  name_prefix = "feedback-platform-${var.environment}"
+  name_prefix                 = "feedback-platform-${var.environment}"
+  ses_email_from_identity_arn = "arn:aws:ses:${var.aws_region}:${data.aws_caller_identity.current.account_id}:identity/${var.email_from}"
 
   common_tags = {
     Project     = "feedback-platform"
@@ -24,13 +31,6 @@ module "sns" {
   tags       = local.common_tags
 }
 
-module "ses" {
-  source = "../../modules/ses"
-
-  admin_email_to = var.admin_email_to
-  email_from     = var.email_from
-}
-
 data "aws_iam_policy_document" "feedback_api" {
   statement {
     actions   = ["dynamodb:PutItem"]
@@ -46,7 +46,7 @@ data "aws_iam_policy_document" "feedback_api" {
 data "aws_iam_policy_document" "critical_notifier" {
   statement {
     actions   = ["ses:SendEmail", "ses:SendRawEmail"]
-    resources = [module.ses.email_from_identity_arn]
+    resources = [local.ses_email_from_identity_arn]
   }
 }
 
@@ -61,7 +61,7 @@ data "aws_iam_policy_document" "weekly_report" {
 
   statement {
     actions   = ["ses:SendEmail", "ses:SendRawEmail"]
-    resources = [module.ses.email_from_identity_arn]
+    resources = [local.ses_email_from_identity_arn]
   }
 }
 
@@ -69,8 +69,9 @@ module "feedback_api_lambda" {
   source = "../../modules/lambda"
 
   function_name = "feedback-api-${var.environment}"
-  artifact_path = var.feedback_api_artifact_path
-  handler       = var.lambda_handler
+  artifact_path = data.archive_file.feedback_api_fakecloud.output_path
+  handler       = "index.handler"
+  runtime       = "nodejs22.x"
   timeout       = 30
   memory_size   = 512
   policy_json   = data.aws_iam_policy_document.feedback_api.json
@@ -145,12 +146,14 @@ resource "aws_sns_topic_subscription" "critical_notifier" {
 module "api_gateway" {
   source = "../../modules/api-gateway"
 
-  name                 = "${local.name_prefix}-api"
-  environment          = var.environment
-  lambda_function_name = module.feedback_api_lambda.function_name
-  lambda_invoke_arn    = module.feedback_api_lambda.invoke_arn
-  cors_allowed_origins = var.cors_allowed_origins
-  tags                 = local.common_tags
+  name                     = "${local.name_prefix}-api"
+  aws_region               = var.aws_region
+  environment              = var.environment
+  lambda_function_name     = module.feedback_api_lambda.function_name
+  lambda_invoke_arn        = module.feedback_api_lambda.invoke_arn
+  local_execute_api_domain = "localhost.localstack.cloud:4566"
+  cors_allowed_origins     = var.cors_allowed_origins
+  tags                     = local.common_tags
 }
 
 module "eventbridge" {

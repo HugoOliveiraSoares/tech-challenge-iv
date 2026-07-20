@@ -1,9 +1,12 @@
 services:
   fakecloud:
     image: ghcr.io/faiscadev/fakecloud:latest
+    pull_policy: always
     container_name: aws-fakecloud
     ports:
       - "4566:4566"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - SERVICES=dynamodb,sns,ses,events,lambda,logs,cloudwatch,iam,apigateway
       - AWS_DEFAULT_REGION=us-east-1

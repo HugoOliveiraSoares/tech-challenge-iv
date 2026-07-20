@@ -146,6 +146,7 @@ module "api_gateway" {
   source = "../../modules/api-gateway"
 
   name                 = "${local.name_prefix}-api"
+  aws_region           = var.aws_region
   environment          = var.environment
   lambda_function_name = module.feedback_api_lambda.function_name
   lambda_invoke_arn    = module.feedback_api_lambda.invoke_arn
