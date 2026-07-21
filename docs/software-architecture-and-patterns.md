@@ -61,7 +61,7 @@ Infraestrutura:
 
 - `infra/environments/dev`: provider AWS apontado para fakecloud em `localhost:4566`.
 - `infra/environments/prod`: provider AWS real, sem endpoints locais.
-- `infra/modules/api-gateway`: HTTP API, CORS, throttling, rotas `POST /avaliacao` e `GET /health`.
+- `infra/modules/api-gateway`: API Gateway REST, throttling, rotas `POST /avaliacao` e `GET /health`.
 - `infra/modules/lambda`: funcao Java 21, role IAM, policy, variaveis de ambiente e log group.
 - `infra/modules/dynamodb`: tabela `feedbacks` e GSI por `periodo`/`dataEnvio`.
 - `infra/modules/sns`: topico de feedback critico.

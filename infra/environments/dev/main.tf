@@ -1,11 +1,5 @@
 data "aws_caller_identity" "current" {}
 
-data "archive_file" "feedback_api_fakecloud" {
-  type        = "zip"
-  source_dir  = "../../../apps/feedback-api/fakecloud"
-  output_path = "${path.module}/.terraform/feedback-api-fakecloud.zip"
-}
-
 locals {
   name_prefix                 = "feedback-platform-${var.environment}"
   ses_email_from_identity_arn = "arn:aws:ses:${var.aws_region}:${data.aws_caller_identity.current.account_id}:identity/${var.email_from}"
@@ -69,9 +63,8 @@ module "feedback_api_lambda" {
   source = "../../modules/lambda"
 
   function_name = "feedback-api-${var.environment}"
-  artifact_path = data.archive_file.feedback_api_fakecloud.output_path
-  handler       = "index.handler"
-  runtime       = "nodejs22.x"
+  artifact_path = var.feedback_api_artifact_path
+  handler       = var.lambda_handler
   timeout       = 30
   memory_size   = 512
   policy_json   = data.aws_iam_policy_document.feedback_api.json

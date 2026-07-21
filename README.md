@@ -21,6 +21,30 @@ Atualmente o repositório concentra a documentação técnica, o contrato OpenAP
 
 Os documentos de referência do projeto estão disponíveis em [`docs/`](docs/), incluindo a especificação técnica e o contrato OpenAPI da API de feedback.
 
+## Execução Local Da Feedback API
+
+Para desenvolvimento local, suba o fakecloud para os serviços AWS emulados e execute a `feedback-api` diretamente pelo Quarkus:
+
+```bash
+docker compose up -d
+./mvnw -pl apps/feedback-api -am quarkus:dev
+```
+
+Com a aplicação em execução, use `localhost:8080`:
+
+```bash
+curl -i http://localhost:8080/health
+```
+
+```bash
+curl -i -X POST http://localhost:8080/avaliacao \
+  -H 'Content-Type: application/json' \
+  -H 'X-Correlation-Id: local-test-1' \
+  -d '{"descricao":"A aula estava confusa e nao consegui acompanhar o conteudo.","nota":2}'
+```
+
+O Terraform do ambiente `dev` continua modelando API Gateway e Lambda com o pacote Maven `apps/feedback-api/target/function.zip`, mas o endpoint local `execute-api.localhost.localstack.cloud:4566` nao e o fluxo recomendado para testar a `feedback-api`. O fakecloud pode entregar eventos incompatíveis com `quarkus-amazon-lambda-http`, causando erro `Missing HTTP method in request event`.
+
 ## CI Inicial
 
 O workflow inicial de integração contínua está em [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Ele roda automaticamente em pull requests para a branch `main`, em pushes na `main` e também pode ser executado manualmente pelo GitHub Actions com `workflow_dispatch`.

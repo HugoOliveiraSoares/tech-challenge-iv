@@ -32,6 +32,8 @@ Dependencias por modulo:
 
 ## Execucao Local
 
+### Modo Desenvolvimento
+
 Instalar/selecionar Java quando necessario:
 
 ```bash
@@ -46,7 +48,7 @@ docker compose up -d
 
 O estado do fakecloud fica em `.fakecloud/`, ignorado pelo Git. A API local atual nao usa DynamoDB/SNS reais; ela persiste em memoria e loga publicacao critica.
 
-Executar a API em modo dev Quarkus:
+Executar a `feedback-api` em modo dev Quarkus:
 
 ```bash
 ./mvnw -pl apps/feedback-api -am quarkus:dev
@@ -66,6 +68,25 @@ Health check:
 ```bash
 curl -i http://localhost:8080/health
 ```
+
+Este e o fluxo recomendado para desenvolver e testar manualmente a API local: fakecloud fornece os servicos AWS emulados, enquanto a aplicacao HTTP roda em `localhost:8080` pelo Quarkus.
+
+### Modo Infra Local
+
+O Terraform em `infra/environments/dev` modela API Gateway, Lambda, DynamoDB, SNS, SES, EventBridge e CloudWatch contra o fakecloud em `localhost:4566`. As Lambdas usam os pacotes Maven gerados em `apps/*/target/function.zip`; para `plan/apply` real, gere esses artefatos antes:
+
+```bash
+./mvnw clean package
+terraform -chdir=infra/environments/dev apply
+```
+
+O endpoint `api_base_url` do Terraform pode ser criado pelo fakecloud, mas nao deve ser usado como fluxo principal para testar a `feedback-api` local. Em teste manual, o API Gateway do fakecloud invocou a Lambda Java com um evento sem metodo HTTP, e o `quarkus-amazon-lambda-http` falhou com:
+
+```text
+java.lang.IllegalStateException: Missing HTTP method in request event
+```
+
+Isso indica incompatibilidade no formato do evento entregue pelo fakecloud/API Gateway local, nao erro de build Maven nem ausencia do handler Java. Para validar comportamento HTTP da API, use `localhost:8080` com `quarkus:dev`. Para validar empacotamento Lambda, use os zips Maven e invoque a Lambda com um evento API Gateway compativel.
 
 ## Comandos de Desenvolvimento e Qualidade
 
