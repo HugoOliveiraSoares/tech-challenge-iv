@@ -1,6 +1,7 @@
 package br.com.fiap.weeklyreport.infra.lambda;
 
 import br.com.fiap.weeklyreport.core.domain.WeeklyReportRequest;
+import br.com.fiap.weeklyreport.core.domain.WeeklyReportResult;
 import br.com.fiap.weeklyreport.core.usecase.GenerateWeeklyReportUseCase;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -17,13 +18,13 @@ public class WeeklyReportHandler implements RequestHandler<WeeklyReportHandler.I
     @Override
     public Output handleRequest(Input input, Context context) {
         String periodo = input == null ? null : input.periodo();
-        generateWeeklyReportUseCase.execute(new WeeklyReportRequest(periodo));
-        return new Output("OK");
+        WeeklyReportResult result = generateWeeklyReportUseCase.execute(new WeeklyReportRequest(periodo));
+        return new Output(result.status(), result.periodo(), result.sent());
     }
 
     public record Input(String periodo) {
     }
 
-    public record Output(String status) {
+    public record Output(String status, String periodo, boolean sent) {
     }
 }
