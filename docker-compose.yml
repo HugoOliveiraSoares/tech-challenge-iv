@@ -9,7 +9,10 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       - SERVICES=dynamodb,sns,ses,events,lambda,logs,cloudwatch,iam,apigateway
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-east-1
+      - AWS_REGION=us-east-1
       - DEBUG=1
     volumes:
       - "./.fakecloud:/var/lib/fakecloud"

@@ -23,7 +23,13 @@ Os documentos de referência do projeto estão disponíveis em [`docs/`](docs/),
 
 ## Execução Local Da Feedback API
 
-Para desenvolvimento local, suba o fakecloud para os serviços AWS emulados e execute a `feedback-api` diretamente pelo Quarkus:
+O fluxo local principal agora usa o `Makefile` para reduzir passos manuais. Para desenvolvimento da API, suba o fakecloud e execute a `feedback-api` diretamente pelo Quarkus:
+
+```bash
+make dev
+```
+
+Comandos equivalentes, caso queira executar manualmente:
 
 ```bash
 docker compose up -d
@@ -44,6 +50,38 @@ curl -i -X POST http://localhost:8080/avaliacao \
 ```
 
 O Terraform do ambiente `dev` continua modelando API Gateway e Lambda com o pacote Maven `apps/feedback-api/target/function.zip`, mas o endpoint local `execute-api.localhost.localstack.cloud:4566` nao e o fluxo recomendado para testar a `feedback-api`. O fakecloud pode entregar eventos incompatíveis com `quarkus-amazon-lambda-http`, causando erro `Missing HTTP method in request event`.
+
+## Comandos De Desenvolvimento
+
+Use `make help` para listar os comandos disponiveis. Os principais fluxos sao:
+
+| Objetivo | Comando |
+| --- | --- |
+| Instalar ferramentas via mise | `make setup` |
+| Subir fakecloud | `make up` |
+| Aguardar fakecloud | `make wait` |
+| Rodar Feedback API em modo dev | `make dev` |
+| Rodar testes rapidos | `make test` |
+| Rodar testes de um modulo | `make test-module MODULE=apps/feedback-api` |
+| Rodar testes de integracao `*IT` | `make integration` |
+| Rodar validacao regressiva local | `make regression` |
+| Validar Terraform | `make infra-validate` |
+| Aplicar Terraform dev no fakecloud | `make infra-bootstrap` |
+| Limpar estado local do fakecloud | `make clean-local` |
+
+`make regression` executa validacao OpenAPI, validacao Terraform e `./mvnw clean verify -Pregression`. O perfil Maven `regression` esta preparado para executar testes de integracao nomeados como `*IT.java` pelo Failsafe.
+
+Para provisionar a infraestrutura local modelada em Terraform contra o fakecloud, use:
+
+```bash
+make infra-bootstrap
+```
+
+Por padrao, esse comando usa e-mails locais ficticios. Para sobrescrever:
+
+```bash
+make infra-bootstrap ADMIN_EMAIL_TO=admin@example.com EMAIL_FROM=no-reply@example.com
+```
 
 ## CI Inicial
 
