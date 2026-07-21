@@ -3,6 +3,11 @@ variable "table_name" {
   type        = string
 }
 
+variable "environment" {
+  description = "Environment name used by auxiliary DynamoDB tables."
+  type        = string
+}
+
 variable "tags" {
   description = "Tags applied to DynamoDB resources."
   type        = map(string)
