@@ -7,6 +7,8 @@ services:
     environment:
       - SERVICES=dynamodb,sns,ses,events,lambda,logs,cloudwatch,iam,apigateway
       - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
       - DEBUG=1
     volumes:
       - "./.fakecloud:/var/lib/fakecloud"
