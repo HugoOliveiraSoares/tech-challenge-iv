@@ -168,6 +168,7 @@ Persistencia modelada no Terraform:
 - Tabela DynamoDB `feedbacks-<environment>` com billing `PAY_PER_REQUEST`.
 - Chave primaria `id` string.
 - GSI `dataEnvio-index` com partition key `periodo` e sort key `dataEnvio`.
+- Tabela DynamoDB `feedback-processing-control-<environment>` para idempotencia do relatorio semanal por `periodo`.
 - Point-in-time recovery e server-side encryption habilitados.
 
 Persistencia implementada no codigo:
@@ -187,8 +188,8 @@ Integracoes implementadas no codigo:
 
 - SNS ainda e `NoOpCriticalFeedbackPublisher` com log.
 - SES de notificacao critica ainda e `NoOpEmailGateway` com log.
-- SES de relatorio semanal ainda e `NoOpReportEmailGateway` com log.
-- `weekly-report` ainda nao consulta DynamoDB nem calcula metricas.
+- SES de relatorio semanal envia e-mail via `SesReportEmailGateway`.
+- `weekly-report` consulta DynamoDB pelo GSI `dataEnvio-index`, calcula metricas semanais e usa tabela de controle para evitar reenvio do mesmo `periodo`.
 
 ## Observabilidade e Operacao
 

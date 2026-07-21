@@ -130,15 +130,14 @@ Codigo atual:
 
 1. `WeeklyReportHandler` recebe `Input(String periodo)`.
 2. Handler cria `WeeklyReportRequest`.
-3. `GenerateWeeklyReportUseCase` delega para `ReportEmailGateway`.
-4. `NoOpReportEmailGateway` registra log; nao consulta dados, calcula metricas ou envia e-mail.
+3. `GenerateWeeklyReportUseCase` resolve o `periodo`, aplica idempotencia, consulta feedbacks, calcula metricas e envia o relatorio.
+4. `DynamoDbWeeklyFeedbackReader` consulta o GSI `dataEnvio-index` por `periodo`.
+5. `DynamoDbWeeklyReportIdempotencyGateway` registra o processamento em `feedback-processing-control-<environment>` com escrita condicional.
+6. `SesReportEmailGateway` envia o relatorio por SES.
 
 Lacunas arquiteturais:
 
-- Falta porta/gateway de leitura de feedbacks no `weekly-report`.
-- Falta modelo de resumo/metricas do relatorio.
-- Falta calculo de periodo default quando o evento nao trouxer `periodo`.
-- Falta idempotencia para evitar reenvio em retries.
+- Falta teste de integracao contra DynamoDB/SES local.
 
 ## Padroes Recorrentes
 
@@ -156,8 +155,8 @@ Lacunas arquiteturais:
 - Endpoint oficial: `POST /avaliacao`, sem acento; nao adicionar `/avaliação` sem decisao explicita.
 - Health check: `GET /health`.
 - Pacotes: `br.com.fiap.feedbackapi`, `br.com.fiap.criticalnotifier`, `br.com.fiap.weeklyreport`, `br.com.fiap.feedbackplatform.shared`.
-- Recursos Terraform: `feedback-api-<environment>`, `critical-notifier-<environment>`, `weekly-report-<environment>`, `feedbacks-<environment>`, `feedback-critical-topic-<environment>`.
-- Variaveis de ambiente de runtime: `FEEDBACK_TABLE_NAME`, `CRITICAL_TOPIC_ARN`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `LOG_LEVEL`.
+- Recursos Terraform: `feedback-api-<environment>`, `critical-notifier-<environment>`, `weekly-report-<environment>`, `feedbacks-<environment>`, `feedback-processing-control-<environment>`, `feedback-critical-topic-<environment>`.
+- Variaveis de ambiente de runtime: `FEEDBACK_TABLE_NAME`, `PROCESSING_CONTROL_TABLE_NAME`, `CRITICAL_TOPIC_ARN`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `LOG_LEVEL`.
 - `periodo` usa formato ISO week UTC `AAAA-Www`, por exemplo `2026-W01`.
 
 ## Regras para Evoluir Sem Quebrar o Desenho
@@ -172,9 +171,9 @@ Lacunas arquiteturais:
 
 ## Areas de Atencao
 
-- Os adapters atuais nao exercitam AWS em runtime; sao placeholders executaveis.
+- `feedback-api` e `critical-notifier` ainda usam adapters placeholder para DynamoDB/SNS/SES.
 - `shared-kernel` ja contem dominio e ports compartilhados; evitar transforma-lo em deposito de DTOs de transporte.
 - `critical-notifier` e `weekly-report` usam inputs simplificados que nao correspondem aos envelopes reais de SNS/EventBridge.
-- `weekly-report` tem permissao `Scan`; preferir `Query` por `periodo` no GSI para o fluxo principal.
+- `weekly-report` usa `Query` por `periodo` no GSI; a tabela de controle evita envios duplicados por periodo.
 - Alarmes/dashboard esperam metricas customizadas ainda nao publicadas.
-- Nao ha DLQ nem idempotencia para fluxos assincronos.
+- Nao ha DLQ para fluxos assincronos.

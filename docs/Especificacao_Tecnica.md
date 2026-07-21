@@ -612,6 +612,7 @@ feedback-platform/
 | `EMAIL_FROM` | `no-reply@example.com` | Remetente validado no SES. |
 | `AWS_REGION` | `us-east-1` | Região AWS. |
 | `LOG_LEVEL` | `INFO` | Nível de log. |
+| `PROCESSING_CONTROL_TABLE_NAME` | `feedback-processing-control-dev` | Tabela DynamoDB auxiliar para idempotência por período. |
 
 ### 12.3 `weekly-report`
 
@@ -700,6 +701,16 @@ aws --endpoint-url=http://localhost:4566 dynamodb create-table \
   --billing-mode PAY_PER_REQUEST
 ```
 
+Tabela de controle de processamento semanal:
+
+```bash
+aws --endpoint-url=http://localhost:4566 dynamodb create-table \
+  --table-name feedback-processing-control-local \
+  --attribute-definitions AttributeName=periodo,AttributeType=S \
+  --key-schema AttributeName=periodo,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST
+```
+
 SNS Topic:
 
 ```bash
@@ -725,6 +736,7 @@ Variáveis esperadas:
 
 ```bash
 export FEEDBACK_TABLE_NAME=feedbacks-local
+export PROCESSING_CONTROL_TABLE_NAME=feedback-processing-control-local
 export CRITICAL_TOPIC_ARN=arn:aws:sns:us-east-1:000000000000:feedback-critical-topic-local
 export ADMIN_EMAIL_TO=admin@example.com
 export EMAIL_FROM=no-reply@example.com
