@@ -23,6 +23,7 @@ O modo integracao local provisiona os recursos modelados em `infra/environments/
 - Java 21, preferencialmente via `mise install`.
 - Docker e Docker Compose.
 - Terraform 1.6+.
+- AWS CLI para comandos auxiliares do fluxo fakecloud local.
 - Node/npm para validacao OpenAPI via `npx`.
 - `curl` para o smoke test.
 

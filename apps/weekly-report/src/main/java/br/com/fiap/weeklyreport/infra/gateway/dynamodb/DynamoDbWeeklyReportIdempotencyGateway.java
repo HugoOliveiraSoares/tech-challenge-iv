@@ -8,7 +8,6 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 
 @ApplicationScoped
@@ -29,13 +28,16 @@ public class DynamoDbWeeklyReportIdempotencyGateway implements WeeklyReportIdemp
     @Override
     public boolean tryStart(String periodo) {
         try {
-            dynamoDbClient.putItem(PutItemRequest.builder()
+            dynamoDbClient.updateItem(UpdateItemRequest.builder()
                     .tableName(tableName)
-                    .item(Map.of(
-                            "periodo", AttributeValue.fromS(periodo),
-                            "status", AttributeValue.fromS("PROCESSING"),
-                            "startedAt", AttributeValue.fromS(clock.instant().toString())))
-                    .conditionExpression("attribute_not_exists(periodo)")
+                    .key(Map.of("periodo", AttributeValue.fromS(periodo)))
+                    .updateExpression("SET #status = :processing, startedAt = :startedAt REMOVE failureReason, failedAt")
+                    .conditionExpression("attribute_not_exists(periodo) OR #status = :failed")
+                    .expressionAttributeNames(Map.of("#status", "status"))
+                    .expressionAttributeValues(Map.of(
+                            ":processing", AttributeValue.fromS("PROCESSING"),
+                            ":failed", AttributeValue.fromS("FAILED"),
+                            ":startedAt", AttributeValue.fromS(clock.instant().toString())))
                     .build());
             return true;
         } catch (ConditionalCheckFailedException exception) {
@@ -53,6 +55,20 @@ public class DynamoDbWeeklyReportIdempotencyGateway implements WeeklyReportIdemp
                 .expressionAttributeValues(Map.of(
                         ":status", AttributeValue.fromS("SENT"),
                         ":sentAt", AttributeValue.fromS(clock.instant().toString())))
+                .build());
+    }
+
+    @Override
+    public void markFailed(String periodo, String reason) {
+        dynamoDbClient.updateItem(UpdateItemRequest.builder()
+                .tableName(tableName)
+                .key(Map.of("periodo", AttributeValue.fromS(periodo)))
+                .updateExpression("SET #status = :status, failedAt = :failedAt, failureReason = :failureReason")
+                .expressionAttributeNames(Map.of("#status", "status"))
+                .expressionAttributeValues(Map.of(
+                        ":status", AttributeValue.fromS("FAILED"),
+                        ":failedAt", AttributeValue.fromS(clock.instant().toString()),
+                        ":failureReason", AttributeValue.fromS(reason == null || reason.isBlank() ? "Unknown failure" : reason)))
                 .build());
     }
 }

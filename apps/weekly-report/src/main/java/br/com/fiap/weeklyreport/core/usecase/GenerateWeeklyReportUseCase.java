@@ -52,19 +52,29 @@ public class GenerateWeeklyReportUseCase {
             return new WeeklyReportResult(periodo, false, "SKIPPED");
         }
 
-        List<WeeklyFeedback> feedbacks = weeklyFeedbackReader.findByPeriodo(periodo).stream()
-                .sorted(Comparator.comparing(WeeklyFeedback::dataEnvio))
-                .toList();
-        LOGGER.infof("Weekly report records processed. periodo=%s count=%d", periodo, feedbacks.size());
-        if (feedbacks.isEmpty()) {
-            LOGGER.infof("No feedback found for weekly report. periodo=%s", periodo);
-        }
+        try {
+            List<WeeklyFeedback> feedbacks = weeklyFeedbackReader.findByPeriodo(periodo).stream()
+                    .sorted(Comparator.comparing(WeeklyFeedback::dataEnvio))
+                    .toList();
+            LOGGER.infof("Weekly report records processed. periodo=%s count=%d", periodo, feedbacks.size());
+            if (feedbacks.isEmpty()) {
+                LOGGER.infof("No feedback found for weekly report. periodo=%s", periodo);
+            }
 
-        WeeklyReport report = buildReport(periodo, feedbacks);
-        reportEmailGateway.sendWeeklyReport(report);
-        idempotencyGateway.markSent(periodo);
-        LOGGER.infof("Weekly report sent. periodo=%s", periodo);
-        return new WeeklyReportResult(periodo, true, "SENT");
+            WeeklyReport report = buildReport(periodo, feedbacks);
+            reportEmailGateway.sendWeeklyReport(report);
+            idempotencyGateway.markSent(periodo);
+            LOGGER.infof("Weekly report sent. periodo=%s", periodo);
+            return new WeeklyReportResult(periodo, true, "SENT");
+        } catch (RuntimeException exception) {
+            try {
+                idempotencyGateway.markFailed(periodo, exception.getMessage());
+            } catch (RuntimeException markFailedException) {
+                LOGGER.errorf(markFailedException, "Failed to mark weekly report as failed. periodo=%s", periodo);
+            }
+            LOGGER.errorf(exception, "Weekly report failed. periodo=%s", periodo);
+            throw exception;
+        }
     }
 
     private String resolvePeriodo(WeeklyReportRequest request) {

@@ -2,6 +2,7 @@ package br.com.fiap.weeklyreport.core.usecase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.fiap.feedbackplatform.shared.domain.Urgencia;
@@ -15,9 +16,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -89,6 +90,32 @@ class GenerateWeeklyReportUseCaseTest {
     }
 
     @Test
+    void permiteReprocessarPeriodoDepoisDeFalhaNoEnvio() {
+        List<WeeklyReport> sent = new ArrayList<>();
+        InMemoryIdempotencyGateway idempotencyGateway = new InMemoryIdempotencyGateway();
+        int[] attempts = {0};
+        GenerateWeeklyReportUseCase useCase = new GenerateWeeklyReportUseCase(
+                periodo -> List.of(feedback("2026-06-22T10:00:00Z", 2, Urgencia.CRITICA)),
+                report -> {
+                    attempts[0]++;
+                    if (attempts[0] == 1) {
+                        throw new IllegalStateException("SES indisponivel");
+                    }
+                    sent.add(report);
+                },
+                idempotencyGateway,
+                CLOCK);
+
+        assertThrows(IllegalStateException.class, () -> useCase.execute(new WeeklyReportRequest("2026-W26")));
+        WeeklyReportResult retry = useCase.execute(new WeeklyReportRequest("2026-W26"));
+
+        assertTrue(retry.sent());
+        assertEquals("SENT", retry.status());
+        assertEquals(2, attempts[0]);
+        assertEquals(1, sent.size());
+    }
+
+    @Test
     void calculaPeriodoQuandoInputNaoInformaPeriodo() {
         List<WeeklyReport> sent = new ArrayList<>();
         GenerateWeeklyReportUseCase useCase = newUseCase(List.of(), sent, new InMemoryIdempotencyGateway());
@@ -111,15 +138,26 @@ class GenerateWeeklyReportUseCaseTest {
     }
 
     private static class InMemoryIdempotencyGateway implements WeeklyReportIdempotencyGateway {
-        private final Set<String> periodos = new HashSet<>();
+        private final Map<String, String> statuses = new HashMap<>();
 
         @Override
         public boolean tryStart(String periodo) {
-            return periodos.add(periodo);
+            String status = statuses.get(periodo);
+            if (status == null || "FAILED".equals(status)) {
+                statuses.put(periodo, "PROCESSING");
+                return true;
+            }
+            return false;
         }
 
         @Override
         public void markSent(String periodo) {
+            statuses.put(periodo, "SENT");
+        }
+
+        @Override
+        public void markFailed(String periodo, String reason) {
+            statuses.put(periodo, "FAILED");
         }
     }
 }

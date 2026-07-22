@@ -7,6 +7,13 @@ TERRAFORM_DIR="$ROOT_DIR/infra/environments/dev"
 AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-http://localhost:4566}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
+for command_name in terraform aws; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    printf '%s is required to create the local fakecloud $default API Gateway stage.\n' "$command_name" >&2
+    exit 1
+  fi
+done
+
 api_base_url="$(terraform -chdir="$TERRAFORM_DIR" output -raw api_base_url)"
 api_host="${api_base_url#https://}"
 api_host="${api_host#http://}"

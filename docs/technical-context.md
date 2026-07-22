@@ -189,7 +189,7 @@ Integracoes implementadas no codigo:
 - SNS ainda e `NoOpCriticalFeedbackPublisher` com log.
 - SES de notificacao critica ainda e `NoOpEmailGateway` com log.
 - SES de relatorio semanal envia e-mail via `SesReportEmailGateway`.
-- `weekly-report` consulta DynamoDB pelo GSI `dataEnvio-index`, calcula metricas semanais e usa tabela de controle para evitar reenvio do mesmo `periodo`.
+- `weekly-report` consulta DynamoDB pelo GSI `dataEnvio-index`, calcula metricas semanais e usa tabela de controle para evitar reenvio de periodos `SENT` e permitir retry de periodos `FAILED`.
 
 ## Observabilidade e Operacao
 

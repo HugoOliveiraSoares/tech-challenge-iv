@@ -92,16 +92,15 @@ Estado atual:
 - Terraform agenda a Lambda semanalmente.
 - `GenerateWeeklyReportUseCase` existe.
 - Handler aceita `periodo` em input simples.
-- Gateway de relatorio e no-op e apenas registra log.
+- `DynamoDbWeeklyFeedbackReader` consulta feedbacks por `periodo` no GSI `dataEnvio-index`.
+- `GenerateWeeklyReportUseCase` calcula media, contadores por dia, contadores por urgencia e lista de criticos.
+- `DynamoDbWeeklyReportIdempotencyGateway` evita reenvio de periodo ja enviado e permite reprocessar periodo marcado como `FAILED`.
+- `SesReportEmailGateway` envia o relatorio semanal por SES.
 
 Estado esperado:
 
-- Consultar feedbacks por `periodo`.
-- Calcular media das notas.
-- Calcular volume por periodo e possivelmente por dia.
-- Contabilizar feedbacks por urgencia.
-- Destacar feedbacks criticos.
-- Enviar relatorio administrativo por e-mail.
+- Validar o fluxo completo contra fakecloud/AWS com testes de integracao.
+- Adaptar o handler para o envelope real do EventBridge/Scheduler se necessario.
 
 ## Restricoes de Negocio e Operacao
 

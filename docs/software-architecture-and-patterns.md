@@ -123,7 +123,7 @@ Ponto sensivel: o handler ainda nao processa o envelope real de SNS. Antes de in
 Infraestrutura modelada:
 
 1. Terraform agenda `weekly-report` com `cron(59 23 ? * SUN *)`.
-2. Terraform concede `dynamodb:Query`, `dynamodb:Scan`, `ses:SendEmail` e `ses:SendRawEmail`.
+2. Terraform concede `dynamodb:Query`, `ses:SendEmail` e `ses:SendRawEmail`.
 3. DynamoDB expoe GSI `dataEnvio-index` para consultar por `periodo` e ordenar por `dataEnvio`.
 
 Codigo atual:
@@ -132,7 +132,7 @@ Codigo atual:
 2. Handler cria `WeeklyReportRequest`.
 3. `GenerateWeeklyReportUseCase` resolve o `periodo`, aplica idempotencia, consulta feedbacks, calcula metricas e envia o relatorio.
 4. `DynamoDbWeeklyFeedbackReader` consulta o GSI `dataEnvio-index` por `periodo`.
-5. `DynamoDbWeeklyReportIdempotencyGateway` registra o processamento em `feedback-processing-control-<environment>` com escrita condicional.
+5. `DynamoDbWeeklyReportIdempotencyGateway` registra o processamento em `feedback-processing-control-<environment>`, bloqueia periodos `SENT` e permite retry de periodos `FAILED`.
 6. `SesReportEmailGateway` envia o relatorio por SES.
 
 Lacunas arquiteturais:

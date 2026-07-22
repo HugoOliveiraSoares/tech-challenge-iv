@@ -119,11 +119,11 @@ Tradeoff: simples e suportado pelo recurso atual, mas nao configura timezone. Se
 - A API persiste apenas em memoria; nenhum item e gravado em DynamoDB pelo codigo Java atual.
 - Feedback critico nao publica SNS real; o adapter apenas loga.
 - Notificacao critica nao envia e-mail real; o adapter SES e no-op.
-- Relatorio semanal nao consulta DynamoDB, nao calcula metricas e nao envia e-mail real.
+- Relatorio semanal ja consulta DynamoDB, calcula metricas e envia e-mail via SES, mas ainda nao tem teste de integracao contra fakecloud/AWS.
 - O handler do notifier nao processa o formato real de `SNSEvent`.
 - O handler do weekly report nao processa um evento real de EventBridge/CloudWatch Events; recebe input proprio.
-- `X-Correlation-Id` e aceito e propagado internamente, mas nao e retornado no response HTTP nem integrado a logs/erros padronizados.
-- Respostas de erro padronizadas do OpenAPI ainda nao foram implementadas.
+- `X-Correlation-Id` e aceito, gerado quando ausente, propagado internamente e retornado no response HTTP.
+- Respostas de erro padronizadas do OpenAPI foram implementadas para validacao, JSON invalido, regra de dominio e erro interno na feedback API.
 - Alarmes/dashboard esperam metricas customizadas que a aplicacao ainda nao publica.
 - Nao ha DLQ ou idempotencia para fluxos assincronos.
 
@@ -134,7 +134,7 @@ Tradeoff: simples e suportado pelo recurso atual, mas nao configura timezone. Se
 - Descricoes sao texto livre e podem conter dados pessoais; sem politica de privacidade, e prudente evitar logs completos.
 - SES sandbox pode bloquear envios para destinatarios nao verificados.
 - fakecloud pode nao reproduzir todos os comportamentos e limites da AWS real.
-- Sem idempotencia, retries de SNS/EventBridge/Lambda podem causar notificacoes ou relatorios duplicados quando os envios reais forem implementados.
+- Sem idempotencia no fluxo de notificacao critica, retries de SNS/Lambda podem causar notificacoes duplicadas quando o envio real for implementado.
 - CI usa placeholders para validar Terraform; isso nao comprova que os zips reais existem fora do job de package.
 
 ## Alternativas Implicitamente Rejeitadas
