@@ -18,6 +18,12 @@ variable "lambda_invoke_arn" {
   type        = string
 }
 
+variable "lambda_integration_uri" {
+  description = "Optional API Gateway integration URI override. Useful for local emulators that expect the Lambda function ARN instead of the AWS invoke ARN."
+  type        = string
+  default     = null
+}
+
 variable "throttling_burst_limit" {
   description = "Default API throttling burst limit."
   type        = number

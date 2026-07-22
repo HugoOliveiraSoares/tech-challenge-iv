@@ -15,7 +15,23 @@ O projeto usa Java 21, Quarkus, Terraform e serviços AWS, com suporte a execuç
 
 ## Estado Atual
 
-Atualmente o repositório concentra a documentação técnica, o contrato OpenAPI, a modelagem Terraform e o backlog de implementação. A estrutura das aplicações Java/Quarkus ainda está em construção.
+O repositório já possui aplicações Java/Quarkus multi-módulo, contrato OpenAPI, testes automatizados e infraestrutura Terraform. As integrações AWS reais ainda não estão conectadas nos adapters Java: a API persiste em memória e os fluxos SNS/SES usam implementações no-op.
+
+## Desenvolvimento Local
+
+O guia completo de ambiente local está em [`docs/development-environment.md`](docs/development-environment.md).
+
+Comandos principais:
+
+```bash
+make help
+make dev
+make local-up
+make smoke
+make test
+make test-it
+make local-down
+```
 
 ## Documentação
 
