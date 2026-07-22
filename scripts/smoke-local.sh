@@ -10,12 +10,22 @@ else
   API_BASE_URL="${API_BASE_URL:-http://localhost:8080}"
 fi
 
+curl_args=()
+if [[ "$API_BASE_URL" == *".execute-api."* ]]; then
+  api_host="${API_BASE_URL#https://}"
+  api_host="${api_host#http://}"
+  api_host="${api_host%%/*}"
+  API_BASE_URL="${AWS_ENDPOINT_URL:-http://localhost:4566}"
+  curl_args=(-H "Host: $api_host")
+fi
+
 CORRELATION_ID="local-smoke-$(date +%Y%m%d%H%M%S)"
 PAYLOAD='{"descricao":"A aula estava confusa e nao consegui acompanhar o conteudo.","nota":2}'
 
 response_file="$(mktemp)"
 status_code="$(curl -sS -o "$response_file" -w '%{http_code}' \
   -X POST "$API_BASE_URL/avaliacao" \
+  "${curl_args[@]}" \
   -H 'Content-Type: application/json' \
   -H "X-Correlation-Id: $CORRELATION_ID" \
   -d "$PAYLOAD")"

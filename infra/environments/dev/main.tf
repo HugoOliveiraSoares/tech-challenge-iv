@@ -145,12 +145,13 @@ resource "aws_sns_topic_subscription" "critical_notifier" {
 module "api_gateway" {
   source = "../../modules/api-gateway"
 
-  name                 = "${local.name_prefix}-api"
-  environment          = var.environment
-  lambda_function_name = module.feedback_api_lambda.function_name
-  lambda_invoke_arn    = module.feedback_api_lambda.invoke_arn
-  cors_allowed_origins = var.cors_allowed_origins
-  tags                 = local.common_tags
+  name                   = "${local.name_prefix}-api"
+  environment            = var.environment
+  lambda_function_name   = module.feedback_api_lambda.function_name
+  lambda_integration_uri = module.feedback_api_lambda.function_arn
+  lambda_invoke_arn      = module.feedback_api_lambda.invoke_arn
+  cors_allowed_origins   = var.cors_allowed_origins
+  tags                   = local.common_tags
 }
 
 module "eventbridge" {

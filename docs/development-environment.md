@@ -154,6 +154,8 @@ make smoke
 
 O smoke test usa o output `api_base_url` do Terraform quando ele existe. Se o output nao estiver disponivel, usa `API_BASE_URL` ou `http://localhost:8080` como fallback.
 
+No fakecloud, `make terraform-dev-apply` tambem cria um stage `$default` por AWS CLI apos o `terraform apply`. Esse ajuste local evita que o prefixo `/dev` seja repassado no evento Lambda, mantendo as rotas Quarkus em `/avaliacao` e `/health`. O stage Terraform `dev` continua existindo para refletir o modelo de infraestrutura.
+
 ## Estado Atual Das Integracoes
 
 O ambiente local ja consegue subir fakecloud e provisionar a infraestrutura modelada. O runtime Java ainda usa adapters em memoria/no-op para DynamoDB, SNS e SES, entao o modo integracao valida empacotamento, Terraform e disponibilidade da API, mas ainda nao comprova persistencia/publicacao/envio reais ate os adapters AWS serem implementados.

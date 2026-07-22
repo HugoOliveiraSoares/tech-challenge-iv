@@ -76,6 +76,7 @@ terraform-dev-plan: package terraform-dev-init ## Plan Terraform dev against fak
 .PHONY: terraform-dev-apply
 terraform-dev-apply: package terraform-dev-init ## Apply Terraform dev against fakecloud.
 	terraform -chdir=$(DEV_TERRAFORM_DIR) apply -auto-approve $(DEV_TERRAFORM_VARS)
+	AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(AWS_ENDPOINT_URL) ./scripts/fakecloud-default-stage.sh
 
 .PHONY: terraform-dev-destroy
 terraform-dev-destroy: terraform-dev-init ## Destroy Terraform dev resources from fakecloud.
