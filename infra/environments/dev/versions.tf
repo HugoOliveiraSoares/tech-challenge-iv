@@ -11,20 +11,21 @@ terraform {
 
 provider "aws" {
   region     = var.aws_region
-  access_key = "test"
-  secret_key = "test"
+  access_key = local.fakecloud_access_key
+  secret_key = local.fakecloud_secret_key
 
+  # Local fakecloud endpoints. Use infra/environments/prod for real AWS resources.
   endpoints {
-    apigateway   = "http://localhost:4566"
-    apigatewayv2 = "http://localhost:4566"
-    cloudwatch   = "http://localhost:4566"
-    dynamodb     = "http://localhost:4566"
-    events       = "http://localhost:4566"
-    iam          = "http://localhost:4566"
-    lambda       = "http://localhost:4566"
-    logs         = "http://localhost:4566"
-    ses          = "http://localhost:4566"
-    sns          = "http://localhost:4566"
-    sts          = "http://localhost:4566"
+    apigateway   = local.fakecloud_endpoint
+    apigatewayv2 = local.fakecloud_endpoint
+    cloudwatch   = local.fakecloud_endpoint
+    dynamodb     = local.fakecloud_endpoint
+    events       = local.fakecloud_endpoint
+    iam          = local.fakecloud_endpoint
+    lambda       = local.fakecloud_endpoint
+    logs         = local.fakecloud_endpoint
+    ses          = local.fakecloud_endpoint
+    sns          = local.fakecloud_endpoint
+    sts          = local.fakecloud_endpoint
   }
 }

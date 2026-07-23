@@ -3,6 +3,11 @@ data "aws_caller_identity" "current" {}
 locals {
   name_prefix = "feedback-platform-${var.environment}"
 
+  # The dev environment is intentionally local-only and targets fakecloud, not real AWS.
+  fakecloud_access_key = "test"
+  fakecloud_endpoint   = "http://localhost:4566"
+  fakecloud_secret_key = "test"
+
   common_tags = {
     Project     = "feedback-platform"
     Environment = var.environment
@@ -13,8 +18,9 @@ locals {
 module "dynamodb" {
   source = "../../modules/dynamodb"
 
-  table_name = "feedbacks-${var.environment}"
-  tags       = local.common_tags
+  table_name  = "feedbacks-${var.environment}"
+  environment = var.environment
+  tags        = local.common_tags
 }
 
 module "sns" {
@@ -52,11 +58,16 @@ data "aws_iam_policy_document" "critical_notifier" {
 
 data "aws_iam_policy_document" "weekly_report" {
   statement {
-    actions = ["dynamodb:Query", "dynamodb:Scan"]
+    actions = ["dynamodb:Query"]
     resources = [
       module.dynamodb.table_arn,
       module.dynamodb.data_envio_index_arn
     ]
+  }
+
+  statement {
+    actions   = ["dynamodb:PutItem", "dynamodb:UpdateItem"]
+    resources = [module.dynamodb.processing_control_table_arn]
   }
 
   statement {
@@ -116,11 +127,15 @@ module "weekly_report_lambda" {
   policy_json   = data.aws_iam_policy_document.weekly_report.json
 
   environment_variables = {
-    ADMIN_EMAIL_TO      = var.admin_email_to
-    AWS_REGION          = var.aws_region
-    EMAIL_FROM          = var.email_from
-    FEEDBACK_TABLE_NAME = module.dynamodb.table_name
-    LOG_LEVEL           = var.log_level
+    ADMIN_EMAIL_TO                = var.admin_email_to
+    AWS_ACCESS_KEY_ID             = local.fakecloud_access_key
+    AWS_ENDPOINT_URL              = local.fakecloud_endpoint
+    AWS_REGION                    = var.aws_region
+    AWS_SECRET_ACCESS_KEY         = local.fakecloud_secret_key
+    EMAIL_FROM                    = var.email_from
+    FEEDBACK_TABLE_NAME           = module.dynamodb.table_name
+    LOG_LEVEL                     = var.log_level
+    PROCESSING_CONTROL_TABLE_NAME = module.dynamodb.processing_control_table_name
   }
 
   tags = local.common_tags

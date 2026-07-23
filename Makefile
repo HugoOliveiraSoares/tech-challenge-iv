@@ -8,6 +8,12 @@ DEV_ADMIN_EMAIL_TO ?= admin@example.com
 DEV_EMAIL_FROM ?= no-reply@example.com
 DEV_TERRAFORM_DIR := infra/environments/dev
 DEV_TERRAFORM_VARS := -var="admin_email_to=$(DEV_ADMIN_EMAIL_TO)" -var="email_from=$(DEV_EMAIL_FROM)"
+FEEDBACK_TABLE_NAME ?= feedbacks-dev
+FEEDBACK_API_LAMBDA_NAME ?= feedback-api-dev
+WEEKLY_REPORT_LAMBDA_NAME ?= weekly-report-dev
+WEEKLY_REPORT_PERIODO ?= 2026-W30
+SEED_FEEDBACK_PERIODO ?= $(WEEKLY_REPORT_PERIODO)
+LAMBDA_OUTPUT_DIR ?= /tmp
 
 .PHONY: help
 help:
@@ -81,6 +87,29 @@ terraform-dev-apply: package terraform-dev-init ## Apply Terraform dev against f
 .PHONY: terraform-dev-destroy
 terraform-dev-destroy: terraform-dev-init ## Destroy Terraform dev resources from fakecloud.
 	terraform -chdir=$(DEV_TERRAFORM_DIR) destroy -auto-approve $(DEV_TERRAFORM_VARS)
+
+.PHONY: invoke-feedback-api
+invoke-feedback-api: ## Invoke feedback-api Lambda through fakecloud.
+	AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) AWS_REGION=$(AWS_REGION) aws --endpoint-url=$(AWS_ENDPOINT_URL) lambda invoke \
+		--function-name $(FEEDBACK_API_LAMBDA_NAME) \
+		--payload '{"httpMethod":"POST","path":"/avaliacao","headers":{"Content-Type":"application/json","X-Correlation-Id":"test-123456"},"body":"{\"descricao\":\"A aula estava confusa e nao consegui acompanhar o conteudo.\",\"nota\":2}","isBase64Encoded":false}' \
+		$(LAMBDA_OUTPUT_DIR)/feedback-api-output.json
+	@cat $(LAMBDA_OUTPUT_DIR)/feedback-api-output.json
+
+.PHONY: invoke-weekly-report
+invoke-weekly-report: ## Invoke weekly-report Lambda through fakecloud.
+	AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) AWS_REGION=$(AWS_REGION) aws --endpoint-url=$(AWS_ENDPOINT_URL) lambda invoke \
+		--function-name $(WEEKLY_REPORT_LAMBDA_NAME) \
+		--payload '{"periodo":"$(WEEKLY_REPORT_PERIODO)"}' \
+		$(LAMBDA_OUTPUT_DIR)/weekly-report-output.json
+	@cat $(LAMBDA_OUTPUT_DIR)/weekly-report-output.json
+
+.PHONY: invoke-lambdas
+invoke-lambdas: invoke-feedback-api invoke-weekly-report ## Invoke feedback-api and weekly-report Lambdas through fakecloud.
+
+.PHONY: seed-feedbacks-dev
+seed-feedbacks-dev: ## Populate feedbacks-dev with sample records for weekly-report tests.
+	AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(AWS_ENDPOINT_URL) FEEDBACK_TABLE_NAME=$(FEEDBACK_TABLE_NAME) SEED_FEEDBACK_PERIODO=$(SEED_FEEDBACK_PERIODO) ./scripts/seed-feedbacks-dev.sh
 
 .PHONY: dev
 dev: fakecloud-up ## Run feedback-api in Quarkus dev mode with local AWS env vars.
