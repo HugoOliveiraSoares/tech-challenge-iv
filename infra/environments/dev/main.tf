@@ -123,7 +123,10 @@ module "weekly_report_lambda" {
 
   environment_variables = {
     ADMIN_EMAIL_TO                = var.admin_email_to
+    AWS_ACCESS_KEY_ID             = "test"
+    AWS_ENDPOINT_URL              = "http://localhost:4566"
     AWS_REGION                    = var.aws_region
+    AWS_SECRET_ACCESS_KEY         = "test"
     EMAIL_FROM                    = var.email_from
     FEEDBACK_TABLE_NAME           = module.dynamodb.table_name
     LOG_LEVEL                     = var.log_level
