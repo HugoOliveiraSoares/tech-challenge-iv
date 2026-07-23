@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 import software.amazon.awssdk.services.ses.SesClient;
 import software.amazon.awssdk.services.ses.model.Body;
 import software.amazon.awssdk.services.ses.model.Content;
@@ -36,6 +37,9 @@ public class SesReportEmailGateway implements ReportEmailGateway {
 
     @Override
     public void sendWeeklyReport(WeeklyReport report) {
+        MdcSnapshot mdcSnapshot = MdcSnapshot.capture();
+        MDC.put("operation", "send_weekly_report_email");
+        MDC.put("periodo", report.periodo());
         try {
             sesClient.sendEmail(SendEmailRequest.builder()
                     .source(emailFrom)
@@ -56,6 +60,27 @@ public class SesReportEmailGateway implements ReportEmailGateway {
         } catch (RuntimeException exception) {
             LOGGER.errorf(exception, "Failed to send weekly report e-mail. periodo=%s", report.periodo());
             throw exception;
+        } finally {
+            mdcSnapshot.restore();
+        }
+    }
+
+    private record MdcSnapshot(Object operation, Object periodo) {
+        static MdcSnapshot capture() {
+            return new MdcSnapshot(MDC.get("operation"), MDC.get("periodo"));
+        }
+
+        void restore() {
+            restore("operation", operation);
+            restore("periodo", periodo);
+        }
+
+        private void restore(String key, Object value) {
+            if (value == null) {
+                MDC.remove(key);
+            } else {
+                MDC.put(key, value);
+            }
         }
     }
 

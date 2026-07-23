@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 @ApplicationScoped
 public class GenerateWeeklyReportUseCase {
@@ -45,36 +46,55 @@ public class GenerateWeeklyReportUseCase {
 
     public WeeklyReportResult execute(WeeklyReportRequest request) {
         String periodo = resolvePeriodo(request);
-        LOGGER.infof("Weekly report job started. periodo=%s", periodo);
-
-        if (!idempotencyGateway.tryStart(periodo)) {
-            LOGGER.infof("Weekly report already processed or in progress. periodo=%s", periodo);
-            return new WeeklyReportResult(periodo, false, "SKIPPED");
-        }
-
+        MDC.put("operation", "generate_weekly_report");
+        MDC.put("periodo", periodo);
+        MDC.put("status", "started");
         try {
-            List<WeeklyFeedback> feedbacks = weeklyFeedbackReader.findByPeriodo(periodo).stream()
-                    .sorted(Comparator.comparing(WeeklyFeedback::dataEnvio))
-                    .toList();
-            LOGGER.infof("Weekly report records processed. periodo=%s count=%d", periodo, feedbacks.size());
-            if (feedbacks.isEmpty()) {
-                LOGGER.infof("No feedback found for weekly report. periodo=%s", periodo);
+            LOGGER.infof("Weekly report job started. periodo=%s", periodo);
+
+            if (!idempotencyGateway.tryStart(periodo)) {
+                MDC.put("status", "skipped");
+                LOGGER.infof("Weekly report already processed or in progress. periodo=%s", periodo);
+                return new WeeklyReportResult(periodo, false, "SKIPPED");
             }
 
-            WeeklyReport report = buildReport(periodo, feedbacks);
-            reportEmailGateway.sendWeeklyReport(report);
-            idempotencyGateway.markSent(periodo);
-            LOGGER.infof("Weekly report sent. periodo=%s", periodo);
-            return new WeeklyReportResult(periodo, true, "SENT");
-        } catch (RuntimeException exception) {
             try {
-                idempotencyGateway.markFailed(periodo, exception.getMessage());
-            } catch (RuntimeException markFailedException) {
-                LOGGER.errorf(markFailedException, "Failed to mark weekly report as failed. periodo=%s", periodo);
+                List<WeeklyFeedback> feedbacks = weeklyFeedbackReader.findByPeriodo(periodo).stream()
+                        .sorted(Comparator.comparing(WeeklyFeedback::dataEnvio))
+                        .toList();
+                MDC.put("status", "records_processed");
+                MDC.put("feedback_count", feedbacks.size());
+                LOGGER.infof("Weekly report records processed. periodo=%s count=%d", periodo, feedbacks.size());
+                if (feedbacks.isEmpty()) {
+                    LOGGER.infof("No feedback found for weekly report. periodo=%s", periodo);
+                }
+
+                WeeklyReport report = buildReport(periodo, feedbacks);
+                reportEmailGateway.sendWeeklyReport(report);
+                idempotencyGateway.markSent(periodo);
+                MDC.put("status", "sent");
+                LOGGER.infof("Weekly report sent. periodo=%s", periodo);
+                return new WeeklyReportResult(periodo, true, "SENT");
+            } catch (RuntimeException exception) {
+                MDC.put("status", "failed");
+                try {
+                    idempotencyGateway.markFailed(periodo, exception.getMessage());
+                } catch (RuntimeException markFailedException) {
+                    LOGGER.errorf(markFailedException, "Failed to mark weekly report as failed. periodo=%s", periodo);
+                }
+                LOGGER.errorf(exception, "Weekly report failed. periodo=%s", periodo);
+                throw exception;
             }
-            LOGGER.errorf(exception, "Weekly report failed. periodo=%s", periodo);
-            throw exception;
+        } finally {
+            clearMdc();
         }
+    }
+
+    private void clearMdc() {
+        MDC.remove("operation");
+        MDC.remove("periodo");
+        MDC.remove("status");
+        MDC.remove("feedback_count");
     }
 
     private String resolvePeriodo(WeeklyReportRequest request) {

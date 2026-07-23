@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest;
@@ -32,6 +33,9 @@ public class DynamoDbWeeklyFeedbackReader implements WeeklyFeedbackReader {
 
     @Override
     public List<WeeklyFeedback> findByPeriodo(String periodo) {
+        MdcSnapshot mdcSnapshot = MdcSnapshot.capture();
+        MDC.put("operation", "query_weekly_feedbacks");
+        MDC.put("periodo", periodo);
         try {
             List<WeeklyFeedback> feedbacks = new ArrayList<>();
             Map<String, AttributeValue> lastEvaluatedKey = null;
@@ -53,6 +57,27 @@ public class DynamoDbWeeklyFeedbackReader implements WeeklyFeedbackReader {
         } catch (RuntimeException exception) {
             LOGGER.errorf(exception, "Failed to query weekly feedbacks. periodo=%s", periodo);
             throw exception;
+        } finally {
+            mdcSnapshot.restore();
+        }
+    }
+
+    private record MdcSnapshot(Object operation, Object periodo) {
+        static MdcSnapshot capture() {
+            return new MdcSnapshot(MDC.get("operation"), MDC.get("periodo"));
+        }
+
+        void restore() {
+            restore("operation", operation);
+            restore("periodo", periodo);
+        }
+
+        private void restore(String key, Object value) {
+            if (value == null) {
+                MDC.remove(key);
+            } else {
+                MDC.put(key, value);
+            }
         }
     }
 
