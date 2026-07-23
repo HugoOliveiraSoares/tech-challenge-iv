@@ -50,13 +50,21 @@ Evidencia: `Feedback`, `CriticalFeedbackEvent`, `PeriodoIsoWeek`, `UrgenciaClass
 
 Tradeoff: evita duplicacao de regra de dominio e contrato interno, mas aumenta risco de acoplamento se DTOs de transporte forem movidos para la sem estabilidade.
 
-### Adapters temporarios in-memory/no-op
+### Adapters temporarios in-memory/no-op onde integracoes ainda nao foram concluidas
 
-Decisao: manter implementacao executavel inicial sem AWS SDK real nos apps.
+Decisao: manter implementacao executavel inicial sem AWS SDK real no `feedback-api` e no `critical-notifier`.
 
-Evidencia: `InMemoryFeedbackGateway`, `NoOpCriticalFeedbackPublisher`, `NoOpEmailGateway` e `NoOpReportEmailGateway`.
+Evidencia: `InMemoryFeedbackGateway`, `NoOpCriticalFeedbackPublisher` e `NoOpEmailGateway`.
 
-Tradeoff: permite testar fluxo de aplicacao, CI e empacotamento cedo, mas pode mascarar lacunas de integracao. Persistencia, SNS e SES ainda nao funcionam de ponta a ponta.
+Tradeoff: permite testar fluxo de aplicacao, CI e empacotamento cedo, mas pode mascarar lacunas de integracao. Persistencia da API, publicacao SNS e notificacao critica por SES ainda nao funcionam de ponta a ponta.
+
+### weekly-report com AWS SDK direto em adapters
+
+Decisao: implementar o relatorio semanal com adapters reais para DynamoDB e SES antes da API persistir no DynamoDB.
+
+Evidencia: `DynamoDbWeeklyFeedbackReader`, `DynamoDbWeeklyReportIdempotencyGateway`, `SesReportEmailGateway` e `AwsClientProducer` em `apps/weekly-report`.
+
+Tradeoff: antecipa a parte operacional do relatorio e valida o desenho de tabela/GSI, mas o fluxo completo ainda depende de dados semeados ou gravados por outro meio enquanto `feedback-api` continuar in-memory.
 
 ### DynamoDB com GSI por periodo
 
@@ -84,11 +92,11 @@ Consequencia: infraestrutura e revisavel e reproduzivel. `plan/apply` completo d
 
 ### fakecloud para desenvolvimento local de infraestrutura
 
-Decisao: `dev` usa endpoints AWS locais em `localhost:4566`.
+Decisao: `infra/environments/dev/` e somente para execucao local com fakecloud; `dev` usa endpoints AWS locais em `localhost:4566`, credenciais `test` e ajustes locais como criacao do stage `$default` por script.
 
-Evidencia: `docker-compose.yml` e `infra/environments/dev/versions.tf`.
+Evidencia: `docker-compose.yml`, `Makefile`, `scripts/fakecloud-default-stage.sh`, comentarios em `infra/environments/dev/main.tf` e endpoints em `infra/environments/dev/versions.tf`.
 
-Tradeoff: reduz dependencia de conta AWS real, mas pode divergir da AWS em API Gateway, Lambda, EventBridge e CloudWatch.
+Tradeoff: reduz dependencia de conta AWS real, mas pode divergir da AWS em API Gateway, Lambda, EventBridge e CloudWatch. Qualquer validacao/deploy em AWS real deve usar `infra/environments/prod/`, nao reaproveitar `dev`.
 
 ### CI sem deploy
 
@@ -120,6 +128,7 @@ Tradeoff: simples e suportado pelo recurso atual, mas nao configura timezone. Se
 - Feedback critico nao publica SNS real; o adapter apenas loga.
 - Notificacao critica nao envia e-mail real; o adapter SES e no-op.
 - Relatorio semanal ja consulta DynamoDB, calcula metricas e envia e-mail via SES, mas ainda nao tem teste de integracao contra fakecloud/AWS.
+- Como a API nao grava DynamoDB, o relatorio semanal nao enxerga feedbacks criados via `POST /avaliacao` sem uma etapa externa de seed/gravacao.
 - O handler do notifier nao processa o formato real de `SNSEvent`.
 - O handler do weekly report nao processa um evento real de EventBridge/CloudWatch Events; recebe input proprio.
 - `X-Correlation-Id` e aceito, gerado quando ausente, propagado internamente e retornado no response HTTP.
@@ -130,10 +139,11 @@ Tradeoff: simples e suportado pelo recurso atual, mas nao configura timezone. Se
 ## Riscos Aceitos ou Implicitos
 
 - Endpoint sem autenticacao e aceitavel no escopo academico, mas insuficiente para producao real.
-- `weekly-report` tem permissao `dynamodb:Scan` como fallback; isso pode gerar custo/latencia se virar caminho principal.
+- `weekly-report` depende do GSI `dataEnvio-index`; se o indice, o atributo `periodo` ou o formato ISO week divergirem, o relatorio pode ficar vazio mesmo com feedbacks na tabela.
 - Descricoes sao texto livre e podem conter dados pessoais; sem politica de privacidade, e prudente evitar logs completos.
 - SES sandbox pode bloquear envios para destinatarios nao verificados.
 - fakecloud pode nao reproduzir todos os comportamentos e limites da AWS real.
+- Tratar `infra/environments/dev/` como ambiente AWS real criaria risco de provisionar recursos com endpoints/credenciais locais incorretos; a separacao pretendida e `dev` local fakecloud e `prod` AWS real.
 - Sem idempotencia no fluxo de notificacao critica, retries de SNS/Lambda podem causar notificacoes duplicadas quando o envio real for implementado.
 - CI usa placeholders para validar Terraform; isso nao comprova que os zips reais existem fora do job de package.
 

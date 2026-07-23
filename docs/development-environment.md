@@ -159,9 +159,9 @@ No fakecloud, `make terraform-dev-apply` tambem cria um stage `$default` por AWS
 
 ## Estado Atual Das Integracoes
 
-O ambiente local ja consegue subir fakecloud e provisionar a infraestrutura modelada. O runtime Java ainda usa adapters em memoria/no-op para DynamoDB, SNS e SES, entao o modo integracao valida empacotamento, Terraform e disponibilidade da API, mas ainda nao comprova persistencia/publicacao/envio reais ate os adapters AWS serem implementados.
+O ambiente local ja consegue subir fakecloud e provisionar a infraestrutura modelada. O `feedback-api` ainda persiste em memoria e o fluxo de notificacao critica ainda usa adapters no-op para SNS/SES; o `weekly-report` ja usa DynamoDB e SES via AWS SDK apontando para fakecloud quando `AWS_ENDPOINT_URL` esta configurado. Por isso, o modo integracao valida empacotamento, Terraform e disponibilidade da API, mas ainda nao comprova o fluxo completo de feedback criado pela API, persistido em DynamoDB, publicado em SNS e enviado por e-mail critico.
 
-Quando os adapters reais forem adicionados, os mesmos comandos devem passar a exercitar DynamoDB, SNS, SES, EventBridge e Lambdas pelo fakecloud.
+Quando os adapters reais faltantes forem adicionados, os mesmos comandos devem passar a exercitar DynamoDB, SNS, SES, EventBridge e Lambdas pelo fakecloud de ponta a ponta.
 
 ## Testes De Integracao
 

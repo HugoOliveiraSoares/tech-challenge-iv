@@ -4,7 +4,7 @@
 
 A Plataforma de Feedback Educacional coleta avaliacoes de estudantes, classifica automaticamente a urgencia de cada feedback e apoia a administracao com notificacoes para casos criticos e relatorios semanais.
 
-O repositorio atende ao Tech Challenge IV. A solucao demonstra uma arquitetura serverless com API publica, persistencia planejada em DynamoDB, notificacao assincrona planejada via SNS/SES e relatorio semanal planejado via EventBridge/SES.
+O repositorio atende ao Tech Challenge IV. A solucao demonstra uma arquitetura serverless com API publica, persistencia planejada em DynamoDB, notificacao assincrona planejada via SNS/SES e relatorio semanal via EventBridge/SES. No estado atual, a API ainda persiste em memoria e a notificacao critica e no-op; o relatorio semanal ja possui leitura DynamoDB, idempotencia e envio SES.
 
 ## Atores
 
@@ -45,9 +45,13 @@ Planejadas/modeladas, mas ainda incompletas no runtime Java:
 - Todo feedback deve ser persistido em DynamoDB.
 - Todo feedback `CRITICA` deve publicar evento SNS para `critical-notifier`.
 - Notificacao critica deve enviar e-mail via SES para `ADMIN_EMAIL_TO`.
-- Relatorio semanal deve consultar feedbacks da semana, calcular indicadores e enviar e-mail administrativo.
-- Erros de API devem seguir o modelo OpenAPI com `code`, `message`, `correlationId` e `details`.
-- `X-Correlation-Id` deve ser retornado no response e aparecer em logs/erros conforme contrato.
+- Integracao fim a fim entre feedback salvo pela API e relatorio semanal ainda depende de substituir a persistencia em memoria da API por DynamoDB.
+
+Ja implementadas no runtime Java:
+
+- Relatorio semanal consulta feedbacks da semana por `periodo`, calcula indicadores e envia e-mail administrativo via SES.
+- Erros de API seguem o modelo OpenAPI para validacao, JSON malformado/mapeamento invalido, regra de dominio e erro interno.
+- `X-Correlation-Id` e retornado no response e aparece nas respostas de erro da API.
 
 ## Jornada Principal: Registro de Feedback
 
@@ -96,6 +100,7 @@ Estado atual:
 - `GenerateWeeklyReportUseCase` calcula media, contadores por dia, contadores por urgencia e lista de criticos.
 - `DynamoDbWeeklyReportIdempotencyGateway` evita reenvio de periodo ja enviado e permite reprocessar periodo marcado como `FAILED`.
 - `SesReportEmailGateway` envia o relatorio semanal por SES.
+- Em ambiente local, esse fluxo deve usar `infra/environments/dev/` somente com fakecloud; dados de exemplo podem ser semeados por `make seed-feedbacks-dev`.
 
 Estado esperado:
 
@@ -107,6 +112,7 @@ Estado esperado:
 - Endpoint sem acento reduz risco de encoding em clientes, API Gateway e testes.
 - O MVP academico nao implementa autenticacao; isso nao deve ser interpretado como suficiente para producao real.
 - Producao deve usar CORS com origens explicitas; `*` e aceitavel apenas em `dev`.
+- `infra/environments/dev/` representa execucao local com fakecloud, nao um ambiente AWS compartilhado ou homologacao.
 - E-mails dependem de identidades SES verificadas, especialmente em sandbox.
 - `descricao` e texto livre e pode conter dados pessoais; evitar logar descricoes completas ate haver politica clara de privacidade.
 - Dados sensiveis nao devem ser incluidos em metricas, alarmes ou logs.
@@ -121,4 +127,4 @@ Cobertos por testes atuais:
 - Classificacao de urgencia cobre limites 0, 3, 4, 6, 7 e 10.
 - `Feedback` calcula `periodo`, normaliza descricao/correlation id e rejeita invariantes invalidas.
 - `PeriodoIsoWeek` cobre virada de ano ISO.
-- Use cases de notifier/report delegam para seus gateways.
+- Use case de notifier delega para gateway de e-mail; use case de relatorio calcula agregacoes, aplica idempotencia e delega o envio.
