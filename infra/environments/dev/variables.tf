@@ -8,6 +8,11 @@ variable "environment" {
   description = "Environment name."
   type        = string
   default     = "dev"
+
+  validation {
+    condition     = var.environment == "dev"
+    error_message = "infra/environments/dev is local-only and must use environment=dev."
+  }
 }
 
 variable "admin_email_to" {
