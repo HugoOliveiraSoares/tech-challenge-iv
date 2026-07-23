@@ -5,5 +5,7 @@ public interface WeeklyReportIdempotencyGateway {
 
     void markSent(String periodo);
 
-    void markFailed(String periodo, String reason);
+    void markFailedBeforeSend(String periodo, String reason);
+
+    void markFailedAfterSendAttempt(String periodo, String reason);
 }

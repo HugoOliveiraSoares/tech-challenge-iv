@@ -32,11 +32,11 @@ public class DynamoDbWeeklyReportIdempotencyGateway implements WeeklyReportIdemp
                     .tableName(tableName)
                     .key(Map.of("periodo", AttributeValue.fromS(periodo)))
                     .updateExpression("SET #status = :processing, startedAt = :startedAt REMOVE failureReason, failedAt")
-                    .conditionExpression("attribute_not_exists(periodo) OR #status = :failed")
+                    .conditionExpression("attribute_not_exists(periodo) OR #status = :failedBeforeSend")
                     .expressionAttributeNames(Map.of("#status", "status"))
                     .expressionAttributeValues(Map.of(
                             ":processing", AttributeValue.fromS("PROCESSING"),
-                            ":failed", AttributeValue.fromS("FAILED"),
+                            ":failedBeforeSend", AttributeValue.fromS("FAILED_BEFORE_SEND"),
                             ":startedAt", AttributeValue.fromS(clock.instant().toString())))
                     .build());
             return true;
@@ -59,14 +59,23 @@ public class DynamoDbWeeklyReportIdempotencyGateway implements WeeklyReportIdemp
     }
 
     @Override
-    public void markFailed(String periodo, String reason) {
+    public void markFailedBeforeSend(String periodo, String reason) {
+        markFailed(periodo, "FAILED_BEFORE_SEND", reason);
+    }
+
+    @Override
+    public void markFailedAfterSendAttempt(String periodo, String reason) {
+        markFailed(periodo, "FAILED_AFTER_SEND_ATTEMPT", reason);
+    }
+
+    private void markFailed(String periodo, String status, String reason) {
         dynamoDbClient.updateItem(UpdateItemRequest.builder()
                 .tableName(tableName)
                 .key(Map.of("periodo", AttributeValue.fromS(periodo)))
                 .updateExpression("SET #status = :status, failedAt = :failedAt, failureReason = :failureReason")
                 .expressionAttributeNames(Map.of("#status", "status"))
                 .expressionAttributeValues(Map.of(
-                        ":status", AttributeValue.fromS("FAILED"),
+                        ":status", AttributeValue.fromS(status),
                         ":failedAt", AttributeValue.fromS(clock.instant().toString()),
                         ":failureReason", AttributeValue.fromS(reason == null || reason.isBlank() ? "Unknown failure" : reason)))
                 .build());

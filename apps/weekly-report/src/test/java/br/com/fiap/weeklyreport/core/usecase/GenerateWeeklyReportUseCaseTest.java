@@ -90,19 +90,19 @@ class GenerateWeeklyReportUseCaseTest {
     }
 
     @Test
-    void permiteReprocessarPeriodoDepoisDeFalhaNoEnvio() {
+    void permiteReprocessarPeriodoDepoisDeFalhaAntesDoEnvio() {
         List<WeeklyReport> sent = new ArrayList<>();
         InMemoryIdempotencyGateway idempotencyGateway = new InMemoryIdempotencyGateway();
         int[] attempts = {0};
         GenerateWeeklyReportUseCase useCase = new GenerateWeeklyReportUseCase(
-                periodo -> List.of(feedback("2026-06-22T10:00:00Z", 2, Urgencia.CRITICA)),
-                report -> {
+                periodo -> {
                     attempts[0]++;
                     if (attempts[0] == 1) {
-                        throw new IllegalStateException("SES indisponivel");
+                        throw new IllegalStateException("DynamoDB indisponivel");
                     }
-                    sent.add(report);
+                    return List.of(feedback("2026-06-22T10:00:00Z", 2, Urgencia.CRITICA));
                 },
+                sent::add,
                 idempotencyGateway,
                 CLOCK);
 
@@ -112,6 +112,30 @@ class GenerateWeeklyReportUseCaseTest {
         assertTrue(retry.sent());
         assertEquals("SENT", retry.status());
         assertEquals(2, attempts[0]);
+        assertEquals(1, sent.size());
+    }
+
+    @Test
+    void naoReprocessaPeriodoDepoisDeFalhaAmbiguaNoEnvio() {
+        List<WeeklyReport> sent = new ArrayList<>();
+        InMemoryIdempotencyGateway idempotencyGateway = new InMemoryIdempotencyGateway();
+        int[] sendAttempts = {0};
+        GenerateWeeklyReportUseCase useCase = new GenerateWeeklyReportUseCase(
+                periodo -> List.of(feedback("2026-06-22T10:00:00Z", 2, Urgencia.CRITICA)),
+                report -> {
+                    sendAttempts[0]++;
+                    sent.add(report);
+                    throw new IllegalStateException("timeout depois da tentativa de envio");
+                },
+                idempotencyGateway,
+                CLOCK);
+
+        assertThrows(IllegalStateException.class, () -> useCase.execute(new WeeklyReportRequest("2026-W26")));
+        WeeklyReportResult retry = useCase.execute(new WeeklyReportRequest("2026-W26"));
+
+        assertFalse(retry.sent());
+        assertEquals("SKIPPED", retry.status());
+        assertEquals(1, sendAttempts[0]);
         assertEquals(1, sent.size());
     }
 
@@ -143,7 +167,7 @@ class GenerateWeeklyReportUseCaseTest {
         @Override
         public boolean tryStart(String periodo) {
             String status = statuses.get(periodo);
-            if (status == null || "FAILED".equals(status)) {
+            if (status == null || "FAILED_BEFORE_SEND".equals(status)) {
                 statuses.put(periodo, "PROCESSING");
                 return true;
             }
@@ -156,8 +180,13 @@ class GenerateWeeklyReportUseCaseTest {
         }
 
         @Override
-        public void markFailed(String periodo, String reason) {
-            statuses.put(periodo, "FAILED");
+        public void markFailedBeforeSend(String periodo, String reason) {
+            statuses.put(periodo, "FAILED_BEFORE_SEND");
+        }
+
+        @Override
+        public void markFailedAfterSendAttempt(String periodo, String reason) {
+            statuses.put(periodo, "FAILED_AFTER_SEND_ATTEMPT");
         }
     }
 }

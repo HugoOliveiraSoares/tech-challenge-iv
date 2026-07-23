@@ -58,6 +58,7 @@ public class GenerateWeeklyReportUseCase {
                 return new WeeklyReportResult(periodo, false, "SKIPPED");
             }
 
+            boolean sendAttempted = false;
             try {
                 List<WeeklyFeedback> feedbacks = weeklyFeedbackReader.findByPeriodo(periodo).stream()
                         .sorted(Comparator.comparing(WeeklyFeedback::dataEnvio))
@@ -70,6 +71,7 @@ public class GenerateWeeklyReportUseCase {
                 }
 
                 WeeklyReport report = buildReport(periodo, feedbacks);
+                sendAttempted = true;
                 reportEmailGateway.sendWeeklyReport(report);
                 idempotencyGateway.markSent(periodo);
                 MDC.put("status", "sent");
@@ -78,7 +80,11 @@ public class GenerateWeeklyReportUseCase {
             } catch (RuntimeException exception) {
                 MDC.put("status", "failed");
                 try {
-                    idempotencyGateway.markFailed(periodo, exception.getMessage());
+                    if (sendAttempted) {
+                        idempotencyGateway.markFailedAfterSendAttempt(periodo, exception.getMessage());
+                    } else {
+                        idempotencyGateway.markFailedBeforeSend(periodo, exception.getMessage());
+                    }
                 } catch (RuntimeException markFailedException) {
                     LOGGER.errorf(markFailedException, "Failed to mark weekly report as failed. periodo=%s", periodo);
                 }

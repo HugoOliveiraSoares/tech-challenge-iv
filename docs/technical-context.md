@@ -230,4 +230,4 @@ Codigo atual:
 - `AvaliacaoResourceTest`: criacao minima via HTTP retornando `201` e urgencia `CRITICA`.
 - `HealthResourceTest`: `GET /health`.
 - `NotifyCriticalFeedbackUseCaseTest`: delegacao para gateway de e-mail.
-- `GenerateWeeklyReportUseCaseTest`: agregacoes semanais, periodo padrao, envio sem feedbacks, bloqueio de duplicidade e retry apos falha.
+- `GenerateWeeklyReportUseCaseTest`: agregacoes semanais, periodo padrao, envio sem feedbacks, bloqueio de duplicidade e retry apenas para falha antes da tentativa de envio.
