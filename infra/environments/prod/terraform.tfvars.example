@@ -3,4 +3,3 @@ environment                     = "prod"
 admin_email_to                  = "admin@example.com"
 email_from                      = "no-reply@example.com"
 cors_allowed_origins            = ["https://feedback.example.com"]
-weekly_report_schedule_timezone = "UTC"

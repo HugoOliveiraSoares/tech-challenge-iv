@@ -116,11 +116,11 @@ Consequencia: uso por browsers em producao exige decisao explicita sobre dominio
 
 ### EventBridge Scheduler para relatorio semanal
 
-Decisao atual: usar `aws_scheduler_schedule` para acionar a Lambda `weekly-report` com `cron(59 23 ? * SUN *)` e timezone configuravel.
+Decisao atual: usar `aws_scheduler_schedule` para acionar a Lambda `weekly-report` com `cron(59 23 ? * SUN *)` em UTC.
 
 Evidencia: `infra/environments/*/variables.tf` e `infra/modules/eventbridge/main.tf`.
 
-Tradeoff: o default `UTC` preserva o comportamento do MVP, mas `weekly_report_schedule_timezone` permite configurar `America/Sao_Paulo` sem trocar o modulo. O Terraform tambem injeta o mesmo valor em `WEEKLY_REPORT_TIMEZONE`, evitando divergencia entre o horario de disparo e o calculo do `periodo` no runtime. O Scheduler usa role propria com permissao restrita para invocar apenas a Lambda de relatorio.
+Tradeoff: UTC preserva a mesma convencao usada para persistir `Feedback.periodo` e para agrupar o relatorio, evitando divergencia entre horario de disparo, consulta no GSI e calculo do `periodo`. O Scheduler usa role propria com permissao restrita para invocar apenas a Lambda de relatorio.
 
 ## Limitacoes Atuais
 

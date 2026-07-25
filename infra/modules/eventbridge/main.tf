@@ -32,7 +32,7 @@ resource "aws_scheduler_schedule" "weekly_report" {
   name                         = var.schedule_name
   description                  = "Triggers the weekly feedback report Lambda."
   schedule_expression          = var.schedule_expression
-  schedule_expression_timezone = var.schedule_timezone
+  schedule_expression_timezone = "UTC"
 
   flexible_time_window {
     mode = "OFF"

@@ -316,9 +316,7 @@ O relatório semanal deve ser gerado automaticamente pelo EventBridge Scheduler.
 
 Execução sugerida:
 
-- domingo às 23h59;
-- timezone: `America/Sao_Paulo`, se configurado no EventBridge Scheduler;
-- caso o timezone não seja usado, configurar em UTC considerando o horário equivalente.
+- domingo às 23h59 UTC.
 
 Conteúdo mínimo:
 
@@ -623,7 +621,6 @@ feedback-platform/
 | `EMAIL_FROM` | `no-reply@example.com` | Remetente validado no SES. |
 | `AWS_REGION` | `us-east-1` | Região AWS. |
 | `LOG_LEVEL` | `INFO` | Nível de log. |
-| `WEEKLY_REPORT_TIMEZONE` | `UTC` | Timezone usado para resolver o período semanal quando o evento não informa `periodo`; deve acompanhar o timezone do Scheduler. |
 
 ---
 

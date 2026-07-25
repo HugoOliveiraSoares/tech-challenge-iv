@@ -160,8 +160,8 @@ Lacunas arquiteturais:
 - Health check: `GET /health`.
 - Pacotes: `br.com.fiap.feedbackapi`, `br.com.fiap.criticalnotifier`, `br.com.fiap.weeklyreport`, `br.com.fiap.feedbackplatform.shared`.
 - Recursos Terraform: `feedback-api-<environment>`, `critical-notifier-<environment>`, `weekly-report-<environment>`, `feedbacks-<environment>`, `feedback-processing-control-<environment>`, `feedback-critical-topic-<environment>`.
-- Variaveis de ambiente de runtime: `FEEDBACK_TABLE_NAME`, `PROCESSING_CONTROL_TABLE_NAME`, `CRITICAL_TOPIC_ARN`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `LOG_LEVEL`, `WEEKLY_REPORT_TIMEZONE`.
-- `periodo` usa formato ISO week `AAAA-Www`, por exemplo `2026-W01`; no cadastro de feedback segue UTC, e no relatorio semanal sem input explicito segue `WEEKLY_REPORT_TIMEZONE`.
+- Variaveis de ambiente de runtime: `FEEDBACK_TABLE_NAME`, `PROCESSING_CONTROL_TABLE_NAME`, `CRITICAL_TOPIC_ARN`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `LOG_LEVEL`.
+- `periodo` usa formato ISO week UTC `AAAA-Www`, por exemplo `2026-W01`; o cadastro de feedback e o relatorio semanal seguem a mesma convencao.
 
 ## Regras para Evoluir Sem Quebrar o Desenho
 

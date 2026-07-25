@@ -142,7 +142,6 @@ module "weekly_report_lambda" {
     FEEDBACK_TABLE_NAME           = module.dynamodb.table_name
     LOG_LEVEL                     = var.log_level
     PROCESSING_CONTROL_TABLE_NAME = module.dynamodb.processing_control_table_name
-    WEEKLY_REPORT_TIMEZONE        = var.weekly_report_schedule_timezone
   }
 
   tags = local.common_tags
@@ -181,7 +180,6 @@ module "eventbridge" {
 
   schedule_name        = "${local.name_prefix}-weekly-report"
   schedule_expression  = var.weekly_report_schedule_expression
-  schedule_timezone    = var.weekly_report_schedule_timezone
   lambda_function_name = module.weekly_report_lambda.function_name
   lambda_function_arn  = module.weekly_report_lambda.function_arn
   tags                 = local.common_tags
