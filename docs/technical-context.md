@@ -12,7 +12,7 @@ Modulos principais:
 - `apps/weekly-report`: Lambda Quarkus para relatorio semanal com consulta DynamoDB, idempotencia e envio SES.
 - `infra/environments/dev`: composicao Terraform apenas para execucao local com fakecloud em `localhost:4566`; nao deve ser usada para recursos AWS reais.
 - `infra/environments/prod`: composicao Terraform para AWS real, sem endpoints locais.
-- `infra/modules/*`: modulos Terraform para API Gateway, Lambda, DynamoDB, SNS, SES, EventBridge/CloudWatch Events e CloudWatch.
+- `infra/modules/*`: modulos Terraform para API Gateway, Lambda, DynamoDB, SNS, SES, EventBridge Scheduler e CloudWatch.
 
 ## Stack e Versoes
 
@@ -22,7 +22,7 @@ Modulos principais:
 - Maven Surefire/Failsafe 3.5.0; JUnit 5, Quarkus JUnit e RestAssured onde aplicavel.
 - Terraform `>= 1.6.0` com provider AWS `~> 5.0`.
 - Lambda runtime Terraform: `java21`; handler padrao: `io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest`.
-- fakecloud local em `localhost:4566` para DynamoDB, SNS, SES, EventBridge, Lambda, logs, CloudWatch, IAM e API Gateway.
+- fakecloud local em `localhost:4566` para DynamoDB, SNS, SES, EventBridge Scheduler, Lambda, logs, CloudWatch, IAM e API Gateway.
 
 Dependencias por modulo:
 
@@ -181,7 +181,7 @@ Persistencia modelada no Terraform:
 - Tabela DynamoDB `feedbacks-<environment>` com billing `PAY_PER_REQUEST`.
 - Chave primaria `id` string.
 - GSI `dataEnvio-index` com partition key `periodo` e sort key `dataEnvio`.
-- Tabela DynamoDB `feedback-processing-control-<environment>` para idempotencia do relatorio semanal por `periodo`.
+- Tabela DynamoDB `feedback-processing-control-<environment>` para idempotencia de notificacoes criticas e relatorio semanal.
 - Point-in-time recovery e server-side encryption habilitados.
 
 Persistencia implementada no codigo:
@@ -195,7 +195,7 @@ Integracoes modeladas no Terraform:
 - API Gateway HTTP API integra com Lambda `feedback-api` para `POST /avaliacao` e `GET /health`.
 - SNS `feedback-critical-topic-<environment>` invoca Lambda `critical-notifier`.
 - SES cria identidades para `email_from` e, quando diferente, `admin_email_to`.
-- EventBridge/CloudWatch Events aciona `weekly-report` pelo cron `cron(59 23 ? * SUN *)`.
+- EventBridge Scheduler aciona `weekly-report` pelo cron `cron(59 23 ? * SUN *)` em UTC, usando a mesma convencao do `periodo` persistido e do agrupamento diario.
 
 Integracoes implementadas no codigo:
 

@@ -114,13 +114,13 @@ Evidencia: `infra/environments/prod/variables.tf` e `infra/environments/dev/vari
 
 Consequencia: uso por browsers em producao exige decisao explicita sobre dominios. Evita copiar o comportamento permissivo de dev.
 
-### Cron UTC para relatorio semanal
+### EventBridge Scheduler para relatorio semanal
 
-Decisao atual: usar `cron(59 23 ? * SUN *)` em `aws_cloudwatch_event_rule`.
+Decisao atual: usar `aws_scheduler_schedule` para acionar a Lambda `weekly-report` com `cron(59 23 ? * SUN *)` em UTC.
 
 Evidencia: `infra/environments/*/variables.tf` e `infra/modules/eventbridge/main.tf`.
 
-Tradeoff: simples e suportado pelo recurso atual, mas nao configura timezone. Se o requisito for horario de Sao Paulo, deve-se revisar o modulo, possivelmente para EventBridge Scheduler.
+Tradeoff: UTC preserva a mesma convencao usada para persistir `Feedback.periodo` e para agrupar o relatorio, evitando divergencia entre horario de disparo, consulta no GSI e calculo do `periodo`. O Scheduler usa role propria com permissao restrita para invocar apenas a Lambda de relatorio.
 
 ## Limitacoes Atuais
 
@@ -130,11 +130,12 @@ Tradeoff: simples e suportado pelo recurso atual, mas nao configura timezone. Se
 - Relatorio semanal ja consulta DynamoDB, calcula metricas e envia e-mail via SES, mas ainda nao tem teste de integracao contra fakecloud/AWS.
 - Como a API nao grava DynamoDB, o relatorio semanal nao enxerga feedbacks criados via `POST /avaliacao` sem uma etapa externa de seed/gravacao.
 - O handler do notifier nao processa o formato real de `SNSEvent`.
-- O handler do weekly report nao processa um evento real de EventBridge/CloudWatch Events; recebe input proprio.
+- O handler do weekly report nao processa um evento real de EventBridge Scheduler; recebe input proprio.
 - `X-Correlation-Id` e aceito, gerado quando ausente, propagado internamente e retornado no response HTTP.
 - Respostas de erro padronizadas do OpenAPI foram implementadas para validacao, JSON invalido, regra de dominio e erro interno na feedback API.
 - Alarmes/dashboard esperam metricas customizadas que a aplicacao ainda nao publica.
-- Nao ha DLQ ou idempotencia para fluxos assincronos.
+- A tabela auxiliar de idempotencia esta provisionada e as Lambdas `critical-notifier` e `weekly-report` recebem permissao/env var para usa-la, mas a idempotencia completa ainda depende da implementacao nos handlers Java.
+- Nao ha DLQ para fluxos assincronos.
 
 ## Riscos Aceitos ou Implicitos
 
@@ -144,7 +145,7 @@ Tradeoff: simples e suportado pelo recurso atual, mas nao configura timezone. Se
 - SES sandbox pode bloquear envios para destinatarios nao verificados.
 - fakecloud pode nao reproduzir todos os comportamentos e limites da AWS real.
 - Tratar `infra/environments/dev/` como ambiente AWS real criaria risco de provisionar recursos com endpoints/credenciais locais incorretos; a separacao pretendida e `dev` local fakecloud e `prod` AWS real.
-- Sem idempotencia no fluxo de notificacao critica, retries de SNS/Lambda podem causar notificacoes duplicadas quando o envio real for implementado.
+- Sem idempotencia implementada no handler de notificacao critica, retries de SNS/Lambda podem causar notificacoes duplicadas quando o envio real for implementado, apesar da infraestrutura ja provisionar a tabela auxiliar e as permissoes necessarias.
 - CI usa placeholders para validar Terraform; isso nao comprova que os zips reais existem fora do job de package.
 
 ## Alternativas Implicitamente Rejeitadas

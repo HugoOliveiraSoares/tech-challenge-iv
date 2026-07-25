@@ -24,6 +24,7 @@ provider "aws" {
     iam          = local.fakecloud_endpoint
     lambda       = local.fakecloud_endpoint
     logs         = local.fakecloud_endpoint
+    scheduler    = local.fakecloud_endpoint
     ses          = local.fakecloud_endpoint
     sns          = local.fakecloud_endpoint
     sts          = local.fakecloud_endpoint

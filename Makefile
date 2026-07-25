@@ -92,7 +92,8 @@ terraform-dev-destroy: terraform-dev-init ## Destroy Terraform dev resources fro
 invoke-feedback-api: ## Invoke feedback-api Lambda through fakecloud.
 	AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) AWS_REGION=$(AWS_REGION) aws --endpoint-url=$(AWS_ENDPOINT_URL) lambda invoke \
 		--function-name $(FEEDBACK_API_LAMBDA_NAME) \
-		--payload '{"httpMethod":"POST","path":"/avaliacao","headers":{"Content-Type":"application/json","X-Correlation-Id":"test-123456"},"body":"{\"descricao\":\"A aula estava confusa e nao consegui acompanhar o conteudo.\",\"nota\":2}","isBase64Encoded":false}' \
+		--cli-binary-format raw-in-base64-out \
+		--payload '{"version":"2.0","routeKey":"POST /avaliacao","rawPath":"/avaliacao","headers":{"content-type":"application/json","x-correlation-id":"test-123456"},"requestContext":{"http":{"method":"POST","path":"/avaliacao","sourceIp":"127.0.0.1","userAgent":"aws-cli"}},"body":"{\"descricao\":\"A aula estava confusa e nao consegui acompanhar o conteudo.\",\"nota\":2}","isBase64Encoded":false}' \
 		$(LAMBDA_OUTPUT_DIR)/feedback-api-output.json
 	@cat $(LAMBDA_OUTPUT_DIR)/feedback-api-output.json
 
@@ -100,6 +101,7 @@ invoke-feedback-api: ## Invoke feedback-api Lambda through fakecloud.
 invoke-weekly-report: ## Invoke weekly-report Lambda through fakecloud.
 	AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) AWS_REGION=$(AWS_REGION) aws --endpoint-url=$(AWS_ENDPOINT_URL) lambda invoke \
 		--function-name $(WEEKLY_REPORT_LAMBDA_NAME) \
+		--cli-binary-format raw-in-base64-out \
 		--payload '{"periodo":"$(WEEKLY_REPORT_PERIODO)"}' \
 		$(LAMBDA_OUTPUT_DIR)/weekly-report-output.json
 	@cat $(LAMBDA_OUTPUT_DIR)/weekly-report-output.json

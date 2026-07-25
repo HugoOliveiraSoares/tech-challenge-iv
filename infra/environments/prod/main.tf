@@ -46,6 +46,11 @@ data "aws_iam_policy_document" "feedback_api" {
 
 data "aws_iam_policy_document" "critical_notifier" {
   statement {
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]
+    resources = [module.dynamodb.processing_control_table_arn]
+  }
+
+  statement {
     actions   = ["ses:SendEmail", "ses:SendRawEmail"]
     resources = [module.ses.email_from_identity_arn]
   }
@@ -102,10 +107,11 @@ module "critical_notifier_lambda" {
   policy_json   = data.aws_iam_policy_document.critical_notifier.json
 
   environment_variables = {
-    ADMIN_EMAIL_TO = var.admin_email_to
-    AWS_REGION     = var.aws_region
-    EMAIL_FROM     = var.email_from
-    LOG_LEVEL      = var.log_level
+    ADMIN_EMAIL_TO                = var.admin_email_to
+    AWS_REGION                    = var.aws_region
+    EMAIL_FROM                    = var.email_from
+    LOG_LEVEL                     = var.log_level
+    PROCESSING_CONTROL_TABLE_NAME = module.dynamodb.processing_control_table_name
   }
 
   tags = local.common_tags

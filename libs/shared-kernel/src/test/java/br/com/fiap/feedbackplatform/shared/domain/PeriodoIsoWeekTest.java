@@ -19,6 +19,16 @@ class PeriodoIsoWeekTest {
     }
 
     @Test
+    void permaneceNaSemanaAnteriorAntesDaMeiaNoiteUtc() {
+        assertEquals("2026-W30", PeriodoIsoWeek.from(Instant.parse("2026-07-26T23:59:59Z")));
+    }
+
+    @Test
+    void iniciaNovaSemanaNaMeiaNoiteUtc() {
+        assertEquals("2026-W31", PeriodoIsoWeek.from(Instant.parse("2026-07-27T00:00:00Z")));
+    }
+
+    @Test
     void rejeitaDataAusente() {
         assertThrows(DomainValidationException.class, () -> PeriodoIsoWeek.from(null));
     }

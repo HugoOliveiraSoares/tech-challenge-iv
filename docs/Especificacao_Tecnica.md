@@ -316,9 +316,7 @@ O relatório semanal deve ser gerado automaticamente pelo EventBridge Scheduler.
 
 Execução sugerida:
 
-- domingo às 23h59;
-- timezone: `America/Sao_Paulo`, se configurado no EventBridge Scheduler;
-- caso o timezone não seja usado, configurar em UTC considerando o horário equivalente.
+- domingo às 23h59 UTC.
 
 Conteúdo mínimo:
 
@@ -653,7 +651,7 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=dynamodb,sns,ses,events,lambda,logs,cloudwatch,iam,apigateway
+      - SERVICES=dynamodb,sns,ses,events,scheduler,lambda,logs,cloudwatch,iam,apigateway
       - AWS_DEFAULT_REGION=us-east-1
       - DEBUG=1
     volumes:

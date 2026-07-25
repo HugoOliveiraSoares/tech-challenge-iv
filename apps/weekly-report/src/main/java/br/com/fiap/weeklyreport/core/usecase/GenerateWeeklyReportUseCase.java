@@ -148,7 +148,7 @@ public class GenerateWeeklyReportUseCase {
         int weekBasedYear = Integer.parseInt(periodo.substring(0, 4));
         int week = Integer.parseInt(periodo.substring(6));
         WeekFields weekFields = WeekFields.ISO;
-        LocalDate monday = LocalDate.now(clock)
+        LocalDate monday = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC)
                 .with(weekFields.weekBasedYear(), weekBasedYear)
                 .with(weekFields.weekOfWeekBasedYear(), week)
                 .with(DayOfWeek.MONDAY);
