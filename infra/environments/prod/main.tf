@@ -134,6 +134,7 @@ module "weekly_report_lambda" {
     FEEDBACK_TABLE_NAME           = module.dynamodb.table_name
     LOG_LEVEL                     = var.log_level
     PROCESSING_CONTROL_TABLE_NAME = module.dynamodb.processing_control_table_name
+    WEEKLY_REPORT_TIMEZONE        = var.weekly_report_schedule_timezone
   }
 
   tags = local.common_tags

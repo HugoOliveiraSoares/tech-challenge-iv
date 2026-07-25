@@ -10,9 +10,11 @@ import br.com.fiap.weeklyreport.core.gateway.ReportEmailGateway;
 import br.com.fiap.weeklyreport.core.gateway.WeeklyFeedbackReader;
 import br.com.fiap.weeklyreport.core.gateway.WeeklyReportIdempotencyGateway;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.WeekFields;
 import java.util.Comparator;
@@ -23,6 +25,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class GenerateWeeklyReportUseCase {
@@ -32,16 +35,28 @@ public class GenerateWeeklyReportUseCase {
     private final ReportEmailGateway reportEmailGateway;
     private final WeeklyReportIdempotencyGateway idempotencyGateway;
     private final Clock clock;
+    private final ZoneId reportZoneId;
+
+    @Inject
+    public GenerateWeeklyReportUseCase(
+            WeeklyFeedbackReader weeklyFeedbackReader,
+            ReportEmailGateway reportEmailGateway,
+            WeeklyReportIdempotencyGateway idempotencyGateway,
+            Clock clock,
+            @ConfigProperty(name = "WEEKLY_REPORT_TIMEZONE", defaultValue = "UTC") String reportTimezone) {
+        this.weeklyFeedbackReader = weeklyFeedbackReader;
+        this.reportEmailGateway = reportEmailGateway;
+        this.idempotencyGateway = idempotencyGateway;
+        this.clock = clock;
+        this.reportZoneId = ZoneId.of(reportTimezone);
+    }
 
     public GenerateWeeklyReportUseCase(
             WeeklyFeedbackReader weeklyFeedbackReader,
             ReportEmailGateway reportEmailGateway,
             WeeklyReportIdempotencyGateway idempotencyGateway,
             Clock clock) {
-        this.weeklyFeedbackReader = weeklyFeedbackReader;
-        this.reportEmailGateway = reportEmailGateway;
-        this.idempotencyGateway = idempotencyGateway;
-        this.clock = clock;
+        this(weeklyFeedbackReader, reportEmailGateway, idempotencyGateway, clock, "UTC");
     }
 
     public WeeklyReportResult execute(WeeklyReportRequest request) {
@@ -108,7 +123,7 @@ public class GenerateWeeklyReportUseCase {
             return request.periodo().trim();
         }
 
-        return PeriodoIsoWeek.from(clock.instant());
+        return PeriodoIsoWeek.from(clock.instant(), reportZoneId);
     }
 
     private WeeklyReport buildReport(String periodo, List<WeeklyFeedback> feedbacks) {
@@ -148,7 +163,7 @@ public class GenerateWeeklyReportUseCase {
         int weekBasedYear = Integer.parseInt(periodo.substring(0, 4));
         int week = Integer.parseInt(periodo.substring(6));
         WeekFields weekFields = WeekFields.ISO;
-        LocalDate monday = LocalDate.now(clock)
+        LocalDate monday = LocalDate.now(clock.withZone(reportZoneId))
                 .with(weekFields.weekBasedYear(), weekBasedYear)
                 .with(weekFields.weekOfWeekBasedYear(), week)
                 .with(DayOfWeek.MONDAY);

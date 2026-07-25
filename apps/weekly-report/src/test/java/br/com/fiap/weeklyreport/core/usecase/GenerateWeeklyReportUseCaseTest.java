@@ -150,6 +150,57 @@ class GenerateWeeklyReportUseCaseTest {
         assertEquals("2026-W26", sent.getFirst().periodo());
     }
 
+    @Test
+    void calculaPeriodoNoTimezoneConfiguradoQuandoInputNaoInformaPeriodo() {
+        Clock mondayUtcSundaySaoPaulo = Clock.fixed(Instant.parse("2026-07-27T02:59:00Z"), ZoneOffset.UTC);
+        List<WeeklyReport> sent = new ArrayList<>();
+        GenerateWeeklyReportUseCase useCase = new GenerateWeeklyReportUseCase(
+                periodo -> List.of(),
+                sent::add,
+                new InMemoryIdempotencyGateway(),
+                mondayUtcSundaySaoPaulo,
+                "America/Sao_Paulo");
+
+        WeeklyReportResult result = useCase.execute(new WeeklyReportRequest(null));
+
+        assertEquals("2026-W30", result.periodo());
+        assertEquals("2026-W30", sent.getFirst().periodo());
+        assertTrue(sent.getFirst().quantidadePorDia().containsKey(LocalDate.parse("2026-07-20")));
+    }
+
+    @Test
+    void mantemPeriodoUtcComoPadraoQuandoInputNaoInformaPeriodo() {
+        Clock mondayUtcSundaySaoPaulo = Clock.fixed(Instant.parse("2026-07-27T02:59:00Z"), ZoneOffset.UTC);
+        List<WeeklyReport> sent = new ArrayList<>();
+        GenerateWeeklyReportUseCase useCase = new GenerateWeeklyReportUseCase(
+                periodo -> List.of(),
+                sent::add,
+                new InMemoryIdempotencyGateway(),
+                mondayUtcSundaySaoPaulo);
+
+        WeeklyReportResult result = useCase.execute(new WeeklyReportRequest(null));
+
+        assertEquals("2026-W31", result.periodo());
+        assertEquals("2026-W31", sent.getFirst().periodo());
+    }
+
+    @Test
+    void periodoInformadoNoInputTemPrioridadeSobreTimezoneConfigurado() {
+        Clock mondayUtcSundaySaoPaulo = Clock.fixed(Instant.parse("2026-07-27T02:59:00Z"), ZoneOffset.UTC);
+        List<WeeklyReport> sent = new ArrayList<>();
+        GenerateWeeklyReportUseCase useCase = new GenerateWeeklyReportUseCase(
+                periodo -> List.of(),
+                sent::add,
+                new InMemoryIdempotencyGateway(),
+                mondayUtcSundaySaoPaulo,
+                "America/Sao_Paulo");
+
+        WeeklyReportResult result = useCase.execute(new WeeklyReportRequest("2026-W29"));
+
+        assertEquals("2026-W29", result.periodo());
+        assertEquals("2026-W29", sent.getFirst().periodo());
+    }
+
     private GenerateWeeklyReportUseCase newUseCase(
             List<WeeklyFeedback> feedbacks,
             List<WeeklyReport> sent,

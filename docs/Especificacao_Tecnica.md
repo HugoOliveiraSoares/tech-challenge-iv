@@ -623,6 +623,7 @@ feedback-platform/
 | `EMAIL_FROM` | `no-reply@example.com` | Remetente validado no SES. |
 | `AWS_REGION` | `us-east-1` | Região AWS. |
 | `LOG_LEVEL` | `INFO` | Nível de log. |
+| `WEEKLY_REPORT_TIMEZONE` | `UTC` | Timezone usado para resolver o período semanal quando o evento não informa `periodo`; deve acompanhar o timezone do Scheduler. |
 
 ---
 

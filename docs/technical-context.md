@@ -195,7 +195,7 @@ Integracoes modeladas no Terraform:
 - API Gateway HTTP API integra com Lambda `feedback-api` para `POST /avaliacao` e `GET /health`.
 - SNS `feedback-critical-topic-<environment>` invoca Lambda `critical-notifier`.
 - SES cria identidades para `email_from` e, quando diferente, `admin_email_to`.
-- EventBridge Scheduler aciona `weekly-report` pelo cron `cron(59 23 ? * SUN *)`, com timezone configuravel por `weekly_report_schedule_timezone`.
+- EventBridge Scheduler aciona `weekly-report` pelo cron `cron(59 23 ? * SUN *)`, com timezone configuravel por `weekly_report_schedule_timezone`; o Terraform propaga esse valor para `WEEKLY_REPORT_TIMEZONE` para o runtime calcular o `periodo` na mesma zona.
 
 Integracoes implementadas no codigo:
 

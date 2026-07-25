@@ -120,7 +120,7 @@ Decisao atual: usar `aws_scheduler_schedule` para acionar a Lambda `weekly-repor
 
 Evidencia: `infra/environments/*/variables.tf` e `infra/modules/eventbridge/main.tf`.
 
-Tradeoff: o default `UTC` preserva o comportamento do MVP, mas `weekly_report_schedule_timezone` permite configurar `America/Sao_Paulo` sem trocar o modulo. O Scheduler usa role propria com permissao restrita para invocar apenas a Lambda de relatorio.
+Tradeoff: o default `UTC` preserva o comportamento do MVP, mas `weekly_report_schedule_timezone` permite configurar `America/Sao_Paulo` sem trocar o modulo. O Terraform tambem injeta o mesmo valor em `WEEKLY_REPORT_TIMEZONE`, evitando divergencia entre o horario de disparo e o calculo do `periodo` no runtime. O Scheduler usa role propria com permissao restrita para invocar apenas a Lambda de relatorio.
 
 ## Limitacoes Atuais
 
