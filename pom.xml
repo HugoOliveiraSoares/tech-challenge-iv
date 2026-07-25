@@ -25,7 +25,6 @@
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.version>3.15.3</quarkus.platform.version>
         <surefire-plugin.version>3.5.0</surefire-plugin.version>
-        <aws.sdk.version>2.25.70</aws.sdk.version>
     </properties>
 
     <dependencyManagement>
@@ -38,9 +37,16 @@
                 <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>bom</artifactId>
-                <version>${aws.sdk.version}</version>
+                <groupId>io.quarkiverse.mcp</groupId>
+                <artifactId>quarkus-mcp-server-bom</artifactId>
+                <version>2.0.0.Beta3</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>${quarkus.platform.group-id}</groupId>
+                <artifactId>quarkus-amazon-services-bom</artifactId>
+                <version>${quarkus.platform.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
