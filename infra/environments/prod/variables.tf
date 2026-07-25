@@ -56,6 +56,12 @@ variable "weekly_report_schedule_expression" {
   default     = "cron(59 23 ? * SUN *)"
 }
 
+variable "weekly_report_schedule_timezone" {
+  description = "Timezone used by EventBridge Scheduler for the weekly report."
+  type        = string
+  default     = "UTC"
+}
+
 variable "cors_allowed_origins" {
   description = "Allowed CORS origins for API Gateway. Set explicit production domains."
   type        = list(string)

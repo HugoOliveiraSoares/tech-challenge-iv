@@ -1,5 +1,5 @@
 variable "schedule_name" {
-  description = "EventBridge rule name for weekly reports."
+  description = "EventBridge Scheduler schedule name for weekly reports."
   type        = string
 }
 
@@ -9,8 +9,14 @@ variable "schedule_expression" {
   default     = "cron(59 23 ? * SUN *)"
 }
 
+variable "schedule_timezone" {
+  description = "Timezone used by EventBridge Scheduler."
+  type        = string
+  default     = "UTC"
+}
+
 variable "lambda_function_name" {
-  description = "Weekly report Lambda function name."
+  description = "Weekly report Lambda function name. Kept for environment-level readability."
   type        = string
 }
 

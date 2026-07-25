@@ -4,7 +4,7 @@ services:
     container_name: aws-fakecloud
     network_mode: host
     environment:
-      - SERVICES=dynamodb,sns,ses,events,lambda,logs,cloudwatch,iam,apigateway
+      - SERVICES=dynamodb,sns,ses,events,scheduler,lambda,logs,cloudwatch,iam,apigateway
       - AWS_DEFAULT_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test

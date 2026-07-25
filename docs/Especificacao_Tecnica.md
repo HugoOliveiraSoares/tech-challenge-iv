@@ -653,7 +653,7 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=dynamodb,sns,ses,events,lambda,logs,cloudwatch,iam,apigateway
+      - SERVICES=dynamodb,sns,ses,events,scheduler,lambda,logs,cloudwatch,iam,apigateway
       - AWS_DEFAULT_REGION=us-east-1
       - DEBUG=1
     volumes:
