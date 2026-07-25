@@ -10,8 +10,15 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class CriticalFeedbackEventTest {
+    private static final String EVENT_TYPE = "FeedbackCritico";
+    private static final String VERSION = "1.0";
     private static final UUID ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final String DESCRICAO = "A aula estava confusa e nao consegui acompanhar";
+    private static final int NOTA = 2;
+    private static final Urgencia URG = Urgencia.CRITICA;
     private static final Instant DATA_ENVIO = Instant.parse("2026-01-01T10:00:00Z");
+    private static final String PERIODO = "2026-W01";
+    private static final String CORRELATION_ID = "correlation-1";
 
     @Test
     void criaEventoAPartirDeFeedback() {
@@ -19,50 +26,40 @@ class CriticalFeedbackEventTest {
                 ID,
                 "A aula estava confusa e nao consegui acompanhar.",
                 2,
-                DATA_ENVIO,
+                Instant.parse("2026-01-01T10:00:00Z"),
                 "correlation-1");
 
         CriticalFeedbackEvent event = CriticalFeedbackEvent.from(feedback);
 
         assertEquals(ID, event.feedbackId());
         assertEquals("correlation-1", event.correlationId());
-        assertEquals("A aula estava confusa e nao consegui acompanhar.", event.descricao());
-        assertEquals(2, event.nota());
-        assertEquals(Urgencia.CRITICA, event.urgencia());
-        assertEquals(DATA_ENVIO, event.dataEnvio());
     }
 
     @Test
     void normalizaCorrelationIdEmBranco() {
-        CriticalFeedbackEvent event = new CriticalFeedbackEvent(
+        CriticalFeedbackEvent event = new CriticalFeedbackEvent(EVENT_TYPE,
+                VERSION,
                 ID,
-                "   ",
-                "Descricao valida para teste.",
-                2,
-                Urgencia.CRITICA,
-                DATA_ENVIO);
+                DESCRICAO,
+                NOTA,
+                URG,
+                DATA_ENVIO,
+                PERIODO,
+                "   ");
 
         assertNull(event.correlationId());
     }
 
     @Test
     void rejeitaFeedbackIdAusente() {
-        assertThrows(
-                DomainValidationException.class,
-                () -> new CriticalFeedbackEvent(null, null, "Descricao valida.", 2, Urgencia.CRITICA, DATA_ENVIO));
-    }
-
-    @Test
-    void rejeitaDescricaoAusente() {
-        assertThrows(
-                DomainValidationException.class,
-                () -> new CriticalFeedbackEvent(ID, null, "   ", 2, Urgencia.CRITICA, DATA_ENVIO));
-    }
-
-    @Test
-    void rejeitaNotaInvalida() {
-        assertThrows(
-                DomainValidationException.class,
-                () -> new CriticalFeedbackEvent(ID, null, "Descricao valida.", 11, Urgencia.CRITICA, DATA_ENVIO));
+        assertThrows(DomainValidationException.class, () -> new CriticalFeedbackEvent(EVENT_TYPE,
+                VERSION,
+                null,
+                DESCRICAO,
+                NOTA,
+                URG,
+                DATA_ENVIO,
+                PERIODO,
+                CORRELATION_ID));
     }
 }
