@@ -92,9 +92,9 @@ Consequencia: infraestrutura e revisavel e reproduzivel. `plan/apply` completo d
 
 ### fakecloud para desenvolvimento local de infraestrutura
 
-Decisao: `infra/environments/dev/` e somente para execucao local com fakecloud; `dev` usa endpoints AWS locais em `localhost:4566`, credenciais `test` e ajustes locais como criacao do stage `$default` por script.
+Decisao: `infra/environments/dev/` e somente para execucao local com fakecloud; `dev` usa endpoints AWS locais em `localhost:4566` e credenciais `test`. O modulo compartilhado do API Gateway usa o stage `$default` para nao incluir o nome do ambiente nas rotas encaminhadas ao Quarkus.
 
-Evidencia: `docker-compose.yml`, `Makefile`, `scripts/fakecloud-default-stage.sh`, comentarios em `infra/environments/dev/main.tf` e endpoints em `infra/environments/dev/versions.tf`.
+Evidencia: `docker-compose.yml`, `Makefile`, `infra/modules/api-gateway`, comentarios em `infra/environments/dev/main.tf` e endpoints em `infra/environments/dev/versions.tf`.
 
 Tradeoff: reduz dependencia de conta AWS real, mas pode divergir da AWS em API Gateway, Lambda, EventBridge e CloudWatch. Qualquer validacao/deploy em AWS real deve usar `infra/environments/prod/`, nao reaproveitar `dev`.
 

@@ -33,7 +33,7 @@ resource "aws_apigatewayv2_route" "get_health" {
 
 resource "aws_apigatewayv2_stage" "this" {
   api_id      = aws_apigatewayv2_api.this.id
-  name        = var.environment
+  name        = "$default"
   auto_deploy = true
   tags        = var.tags
 

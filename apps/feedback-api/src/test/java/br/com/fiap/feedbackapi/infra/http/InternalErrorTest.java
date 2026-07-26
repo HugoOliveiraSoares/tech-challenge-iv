@@ -20,11 +20,14 @@ class InternalErrorTest {
 
     @Test
     void deveRetornar500QuandoOcorrerErroInesperado() {
+        var correlationId = "internal-error-test";
+
         when(criarAvaliacaoUseCase.execute(any(CriarAvaliacaoCommand.class)))
                 .thenThrow(new IllegalStateException("Erro inesperado"));
 
         given()
                 .contentType("application/json")
+                .header(HttpHeadersName.X_CORRELATION_ID, correlationId)
                 .body("""
                         {
                            "descricao": "Testando erro inesperado na aplicacao",
@@ -34,10 +37,10 @@ class InternalErrorTest {
                 .when().post("/avaliacao")
                 .then()
                 .statusCode(500)
-                .header(HttpHeadersName.X_CORRELATION_ID, notNullValue())
+                .header(HttpHeadersName.X_CORRELATION_ID, equalTo(correlationId))
                 .body("code", equalTo("INTERNAL_ERROR"))
                 .body("message", equalTo("Erro interno ao processar a requisição"))
-                .body("correlationId", notNullValue())
+                .body("correlationId", equalTo(correlationId))
                 .body("details", notNullValue());
 
     }

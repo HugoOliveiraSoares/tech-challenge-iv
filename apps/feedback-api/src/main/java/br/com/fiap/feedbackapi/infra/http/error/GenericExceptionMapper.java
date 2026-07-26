@@ -4,16 +4,20 @@ import br.com.fiap.feedbackapi.infra.http.CorrelationIdProvider;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
+import org.jboss.logging.Logger;
 
 import java.util.List;
 
 @Provider
 public class GenericExceptionMapper implements ExceptionMapper<Exception> {
+    private static final Logger LOGGER = Logger.getLogger(GenericExceptionMapper.class);
+
     @Context
     ContainerRequestContext requestContext;
 
@@ -34,6 +38,16 @@ public class GenericExceptionMapper implements ExceptionMapper<Exception> {
         if(jacksonException instanceof JsonMappingException){
             return JsonErrorResponseFactory.invalidMapping(correlationId);
         }
+
+        if (exception instanceof WebApplicationException webApplicationException) {
+            return webApplicationException.getResponse();
+        }
+
+        LOGGER.errorf(exception,
+                "Unexpected request error. correlationId=%s method=%s uri=%s",
+                correlationId,
+                requestContext.getMethod(),
+                requestContext.getUriInfo().getRequestUri());
 
         var body = new ApiErrorResponse("INTERNAL_ERROR",
                 "Erro interno ao processar a requisição",

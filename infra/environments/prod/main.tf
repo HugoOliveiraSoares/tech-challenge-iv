@@ -87,7 +87,6 @@ module "feedback_api_lambda" {
   policy_json   = data.aws_iam_policy_document.feedback_api.json
 
   environment_variables = {
-    AWS_REGION          = var.aws_region
     CRITICAL_TOPIC_ARN  = module.sns.topic_arn
     FEEDBACK_TABLE_NAME = module.dynamodb.table_name
     LOG_LEVEL           = var.log_level
@@ -108,7 +107,6 @@ module "critical_notifier_lambda" {
 
   environment_variables = {
     ADMIN_EMAIL_TO                = var.admin_email_to
-    AWS_REGION                    = var.aws_region
     EMAIL_FROM                    = var.email_from
     LOG_LEVEL                     = var.log_level
     PROCESSING_CONTROL_TABLE_NAME = module.dynamodb.processing_control_table_name
@@ -129,7 +127,6 @@ module "weekly_report_lambda" {
 
   environment_variables = {
     ADMIN_EMAIL_TO                = var.admin_email_to
-    AWS_REGION                    = var.aws_region
     EMAIL_FROM                    = var.email_from
     FEEDBACK_TABLE_NAME           = module.dynamodb.table_name
     LOG_LEVEL                     = var.log_level
@@ -159,7 +156,6 @@ module "api_gateway" {
   source = "../../modules/api-gateway"
 
   name                 = "${local.name_prefix}-api"
-  environment          = var.environment
   lambda_function_name = module.feedback_api_lambda.function_name
   lambda_invoke_arn    = module.feedback_api_lambda.invoke_arn
   cors_allowed_origins = var.cors_allowed_origins

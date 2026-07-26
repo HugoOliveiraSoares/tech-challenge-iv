@@ -3,11 +3,6 @@ variable "name" {
   type        = string
 }
 
-variable "environment" {
-  description = "Stage name."
-  type        = string
-}
-
 variable "lambda_function_name" {
   description = "Feedback API Lambda function name."
   type        = string

@@ -97,7 +97,7 @@ resource "aws_cloudwatch_dashboard" "this" {
           title   = "Lambda Invocations and Errors"
           view    = "timeSeries"
           region  = data.aws_region.current.name
-          metrics = flatten([for name in var.lambda_function_names : [["AWS/Lambda", "Invocations", "FunctionName", name], [".", "Errors", ".", name]]])
+          metrics = concat([for name in var.lambda_function_names : [["AWS/Lambda", "Invocations", "FunctionName", name], [".", "Errors", ".", name]]]...)
         }
       },
       {

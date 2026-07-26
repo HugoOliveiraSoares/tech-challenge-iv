@@ -1,6 +1,6 @@
 output "api_base_url" {
   description = "Base URL for API calls."
-  value       = module.api_gateway.stage_url
+  value       = module.api_gateway.api_endpoint
 }
 
 output "feedback_table_name" {
