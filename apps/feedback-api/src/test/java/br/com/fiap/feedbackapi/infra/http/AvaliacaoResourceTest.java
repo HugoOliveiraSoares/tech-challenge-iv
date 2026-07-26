@@ -7,6 +7,7 @@ import static org.mockito.Mockito.doNothing;
 
 import br.com.fiap.feedbackplatform.shared.domain.CriticalFeedbackEvent;
 import br.com.fiap.feedbackplatform.shared.port.CriticalFeedbackPublisher;
+import br.com.fiap.feedbackplatform.shared.port.FeedbackRepository;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,9 @@ import org.junit.jupiter.api.Test;
 class AvaliacaoResourceTest {
     @InjectMock
     CriticalFeedbackPublisher criticalFeedbackPublisher;
+
+    @InjectMock
+    FeedbackRepository feedbackRepository;
 
     @Test
     void deveCriarAvaliacaoMinima() {

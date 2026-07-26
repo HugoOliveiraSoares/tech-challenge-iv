@@ -12,10 +12,10 @@ import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sns.model.PublishRequest;
 
 
-
 @ApplicationScoped
 public class SnsCriticalFeedbackPublisher implements CriticalFeedbackPublisher {
-    private static final Logger LOGGER = Logger.getLogger(String.valueOf(SnsCriticalFeedbackPublisher.class));
+
+    private static final Logger LOGGER = Logger.getLogger(SnsCriticalFeedbackPublisher.class);
 
     private final SnsClient snsClient;
     private final ObjectMapper objectMapper;

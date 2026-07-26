@@ -1,7 +1,6 @@
-package br.com.fiap.feedbackapi.infra.http;
+package br.com.fiap.feedbackapi.infra.gateway.sns;
 
 import br.com.fiap.feedbackapi.core.exception.NotificationException;
-import br.com.fiap.feedbackapi.infra.gateway.sns.SnsCriticalFeedbackPublisher;
 import br.com.fiap.feedbackplatform.shared.domain.CriticalFeedbackEvent;
 import br.com.fiap.feedbackplatform.shared.domain.Urgencia;
 import com.fasterxml.jackson.core.JsonProcessingException;

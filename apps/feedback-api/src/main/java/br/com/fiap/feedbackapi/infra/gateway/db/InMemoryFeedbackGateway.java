@@ -6,7 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-@ApplicationScoped
+//@ApplicationScoped
 public class InMemoryFeedbackGateway implements FeedbackRepository {
     private final Queue<Feedback> feedbacks = new ConcurrentLinkedQueue<>();
 
