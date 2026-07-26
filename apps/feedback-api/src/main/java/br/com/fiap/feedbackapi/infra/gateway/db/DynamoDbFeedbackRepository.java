@@ -1,10 +1,12 @@
 package br.com.fiap.feedbackapi.infra.gateway.db;
 
+import br.com.fiap.feedbackapi.core.exception.PersistenceException;
 import br.com.fiap.feedbackplatform.shared.domain.Feedback;
 import br.com.fiap.feedbackplatform.shared.port.FeedbackRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
@@ -36,9 +38,18 @@ public class DynamoDbFeedbackRepository implements FeedbackRepository {
                 .item(item)
                 .build();
 
-        dynamoDbClient.putItem(request);
+        try{
+            dynamoDbClient.putItem(request);
 
-        LOGGER.infof("Feedback persistido. feedbackId=%s, correlationId=%s", feedback.id(), feedback.correlationId());
+            LOGGER.infof("Feedback persistido. feedbackId=%s, correlationId=%s", feedback.id(), feedback.correlationId());
+
+        }catch (SdkException exception){
+            LOGGER.errorf(exception,
+                    "Falha ao persistir feedback. feedbackId=%s, correlationId=%s", feedback.id(), feedback.correlationId());
+
+            throw new PersistenceException("Falha ao persistir feedback.",
+                    exception);
+        }
     }
 
     private Map<String, AttributeValue> toItem(Feedback feedback) {

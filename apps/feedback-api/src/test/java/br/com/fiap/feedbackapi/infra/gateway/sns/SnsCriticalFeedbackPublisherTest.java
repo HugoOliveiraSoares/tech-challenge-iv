@@ -26,7 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class SnsCriticalFeedbackPublisherTest {
+class SnsCriticalFeedbackPublisherTest {
     private static final String TOPIC_ARN = "arn:aws:sns:us-east-1:000000000000:critical-feedback";
 
     @Mock
