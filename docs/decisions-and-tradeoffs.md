@@ -40,7 +40,7 @@ Decisao: separar `core` e `infra`, com use cases dependendo de ports/interfaces.
 
 Evidencia: estrutura dos tres apps, `FeedbackRepository`, `CriticalFeedbackPublisher`, gateways locais e testes de use case com doubles simples.
 
-Consequencia: facilita substituir adapters no-op por AWS SDK sem contaminar regras de negocio. O custo e manter algumas interfaces/records mesmo em fluxos pequenos.
+Consequencia: facilita substituir adapters no-op por AWS SDK sem levar detalhes AWS ao caso de uso. O custo e manter interfaces/records mesmo em fluxos pequenos. CDI e logging ainda aparecem em `core`, portanto nao ha isolamento completo de frameworks.
 
 ### Shared kernel para dominio transversal
 
@@ -120,22 +120,14 @@ Decisao atual: usar `aws_scheduler_schedule` para acionar a Lambda `weekly-repor
 
 Evidencia: `infra/environments/*/variables.tf` e `infra/modules/eventbridge/main.tf`.
 
-Tradeoff: UTC preserva a mesma convencao usada para persistir `Feedback.periodo` e para agrupar o relatorio, evitando divergencia entre horario de disparo, consulta no GSI e calculo do `periodo`. O Scheduler usa role propria com permissao restrita para invocar apenas a Lambda de relatorio.
+Tradeoff: UTC preserva a mesma convencao usada para persistir `Feedback.periodo` e para agrupar o relatorio. O Scheduler usa role propria com permissao restrita para invocar apenas a Lambda de relatorio. A configuracao nao define payload de entrada; o contrato Scheduler/handler ainda precisa de validacao integrada.
 
 ## Limitacoes Atuais
 
-- A API persiste apenas em memoria; nenhum item e gravado em DynamoDB pelo codigo Java atual.
-- Feedback critico nao publica SNS real; o adapter apenas loga.
-- Notificacao critica nao envia e-mail real; o adapter SES e no-op.
-- Relatorio semanal ja consulta DynamoDB, calcula metricas e envia e-mail via SES, mas ainda nao tem teste de integracao contra fakecloud/AWS.
-- Como a API nao grava DynamoDB, o relatorio semanal nao enxerga feedbacks criados via `POST /avaliacao` sem uma etapa externa de seed/gravacao.
-- O handler do notifier nao processa o formato real de `SNSEvent`.
-- O handler do weekly report nao processa um evento real de EventBridge Scheduler; recebe input proprio.
-- `X-Correlation-Id` e aceito, gerado quando ausente, propagado internamente e retornado no response HTTP.
-- Respostas de erro padronizadas do OpenAPI foram implementadas para validacao, JSON invalido, regra de dominio e erro interno na feedback API.
-- Alarmes/dashboard esperam metricas customizadas que a aplicacao ainda nao publica.
-- A tabela auxiliar de idempotencia esta provisionada e as Lambdas `critical-notifier` e `weekly-report` recebem permissao/env var para usa-la, mas a idempotencia completa ainda depende da implementacao nos handlers Java.
-- Nao ha DLQ para fluxos assincronos.
+- A separacao em adapters permite executar os apps antes de concluir AWS, mas o fluxo de negocio ainda nao funciona de ponta a ponta.
+- A infraestrutura provisiona recursos e permissoes que os adapters in-memory/no-op ainda nao consomem.
+- Contratos assincronos, idempotencia do notifier e recuperacao operacional do relatorio ainda exigem decisoes explicitas.
+- A lista priorizada e verificavel das lacunas fica em [`pendencias.md`](pendencias.md), evitando duplicar aqui o inventario operacional.
 
 ## Riscos Aceitos ou Implicitos
 
@@ -154,4 +146,6 @@ Tradeoff: UTC preserva a mesma convencao usada para persistir `Feedback.periodo`
 - Envio de e-mail dentro da API: o desenho usa SNS e notifier separado.
 - Rota acentuada: substituida por `/avaliacao` nos contratos e implementacao.
 - CORS `*` em producao: `prod` usa lista vazia por padrao.
-- Relatorio por varredura principal: a modelagem do GSI indica preferencia por `Query` por `periodo`, embora `Scan` esteja permitido como fallback.
+- Relatorio por varredura principal: o codigo e a policy IAM implementam apenas `Query` no GSI por `periodo`.
+
+As acoes pendentes, riscos ainda nao aceitos e perguntas que exigem decisao humana estao em [`pendencias.md`](pendencias.md).

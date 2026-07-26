@@ -2,9 +2,11 @@
 
 Use `infra/environments/prod` para AWS real. O ambiente `dev` utiliza FakeCloud.
 
+Este guia descreve o procedimento manual e nao afirma que a stack esteja aplicada atualmente. O state de `prod` e local; confirme conta, regiao, plano e custodia do state antes de qualquer operacao.
+
 Pre-requisito: os arquivos `apps/*/target/function.zip` devem estar gerados.
 
-## Autenticacao
+## Autenticação
 
 ```bash
 aws login --profile feedback-prod
@@ -15,6 +17,18 @@ eval "$(aws configure export-credentials \
 
 aws sts get-caller-identity
 ```
+
+O profile `feedback-prod` precisa existir previamente na configuracao local da AWS CLI. Confirme que a identidade retornada pertence a conta autorizada antes de continuar.
+
+Defina as variaveis obrigatorias sem versionar valores locais:
+
+```bash
+export TF_VAR_aws_region=us-east-1
+export TF_VAR_admin_email_to=admin@example.com
+export TF_VAR_email_from=no-reply@example.com
+```
+
+`infra/environments/prod/terraform.tfvars.example` lista tambem `environment` e `cors_allowed_origins`. Em uso real, substitua os e-mails de exemplo e configure origens CORS explicitas.
 
 ## Terraform Init
 
@@ -52,23 +66,25 @@ terraform -chdir=infra/environments/prod output
 terraform -chdir=infra/environments/prod output -raw api_base_url
 ```
 
-## Verificacao Do SES
+## Verificação Do SES
+
+Use a mesma região informada a Terraform em `aws_region`:
 
 ```bash
 aws ses get-identity-verification-attributes \
-  --region us-east-1 \
+  --region "${TF_VAR_aws_region:-us-east-1}" \
   --identities \
-  no-reply@example.com \
-  admin@example.com
+  "$TF_VAR_email_from" \
+  "$TF_VAR_admin_email_to"
 ```
 
 Verifique se a conta SES ainda esta no sandbox:
 
 ```bash
-aws sesv2 get-account --region us-east-1
+aws sesv2 get-account --region "${TF_VAR_aws_region:-us-east-1}"
 ```
 
-## Renovacao Das Credenciais
+## Renovação Das Credenciais
 
 Se ocorrer `ExpiredToken`:
 
@@ -89,7 +105,7 @@ aws sts get-caller-identity
 
 Depois, gere um novo plano e execute o `apply`.
 
-## Destruicao
+## Destruição
 
 Revise antes de aplicar:
 
@@ -105,7 +121,7 @@ terraform -chdir=infra/environments/prod apply \
   /tmp/feedback-platform-prod-destroy.tfplan
 ```
 
-## Observacoes
+## Observações
 
 - `AWS_REGION` nao deve ser configurada manualmente nas variaveis de ambiente das Lambdas.
 - Credenciais exportadas por `aws login` sao temporarias.

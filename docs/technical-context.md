@@ -109,13 +109,13 @@ terraform -chdir=infra/environments/prod validate
 
 Os targets `make terraform-dev-*` tambem sao locais e apontam para fakecloud. Eles existem para validar/provisionar a stack de desenvolvimento em maquina local, nao para deploy em uma conta AWS.
 
-Para `terraform validate` sem build Java, crie placeholders em `apps/*/target/function.zip`; o CI faz isso porque o modulo Lambda calcula `filebase64sha256(var.artifact_path)`. Para `plan/apply` real, rode `./mvnw clean package` antes para gerar os zips corretos:
+Para `terraform validate` sem build Java, o CI cria placeholders em `apps/*/target/function.zip`, pois o modulo Lambda calcula `filebase64sha256(var.artifact_path)`. Para validacao local pelos targets Make e para qualquer `plan/apply`, rode `make package` para gerar os zips corretos:
 
 - `apps/feedback-api/target/function.zip`
 - `apps/critical-notifier/target/function.zip`
 - `apps/weekly-report/target/function.zip`
 
-Nao ha configuracao versionada de lint Java, formatter Java, cobertura, migrations, seeds ou deploy automatizado. O workflow `.github/workflows/ci.yml` roda testes Java, package Maven, validacao OpenAPI, `terraform fmt -check` e `terraform validate` para `dev` e `prod`; ele nao executa `terraform apply` nem testes de integracao com fakecloud/AWS.
+Nao ha configuracao versionada de lint/formatter Java, medicao de cobertura, migrations ou deploy automatizado. Existe seed local para o relatorio em `scripts/seed-feedbacks-dev.sh`/`make seed-feedbacks-dev`. O workflow `.github/workflows/ci.yml` roda testes Java, package Maven, validacao OpenAPI, `terraform fmt -check` e `terraform validate` para `dev` e `prod`; ele nao executa `terraform plan/apply`, nao reutiliza no job Terraform os zips gerados pelo job Maven e nao roda testes de integracao com fakecloud/AWS.
 
 ## Estrutura Tecnica
 
@@ -133,7 +133,7 @@ Padrao de camadas observado:
 - `core/domain`: records e tipos de dominio especificos do app quando existem.
 - `core/dto`: comandos de caso de uso quando necessario.
 - `core/gateway`: ports/interfaces de saida locais ao app.
-- `core/usecase`: orquestracao de regra de aplicacao.
+- `core/usecase`: orquestracao de regra de aplicacao; os casos de uso usam CDI e, no relatorio, JBoss Logging/MDC, portanto o `core` nao e totalmente neutro a frameworks.
 - `infra/http`: recursos REST e DTOs de transporte da API.
 - `infra/lambda`: handlers Lambda diretos.
 - `infra/gateway/*`: adapters de infraestrutura; podem ser temporarios (`InMemory`/`NoOp`) ou adapters AWS reais, como os de DynamoDB/SES no `weekly-report`.
@@ -181,7 +181,7 @@ Persistencia modelada no Terraform:
 - Tabela DynamoDB `feedbacks-<environment>` com billing `PAY_PER_REQUEST`.
 - Chave primaria `id` string.
 - GSI `dataEnvio-index` com partition key `periodo` e sort key `dataEnvio`.
-- Tabela DynamoDB `feedback-processing-control-<environment>` para idempotencia de notificacoes criticas e relatorio semanal.
+- Tabela DynamoDB `feedback-processing-control-<environment>` com partition key `periodo`. O Terraform concede acesso ao notifier e ao relatorio, mas somente `weekly-report` a usa atualmente; o esquema existente e orientado a idempotencia por periodo.
 - Point-in-time recovery e server-side encryption habilitados.
 
 Persistencia implementada no codigo:
@@ -202,8 +202,14 @@ Integracoes implementadas no codigo:
 - SNS ainda e `NoOpCriticalFeedbackPublisher` com log.
 - SES de notificacao critica ainda e `NoOpEmailGateway` com log.
 - SES de relatorio semanal envia e-mail via `SesReportEmailGateway`.
-- `weekly-report` consulta DynamoDB pelo GSI `dataEnvio-index`, calcula metricas semanais e usa tabela de controle para evitar reenvio de periodos `SENT` e permitir retry de periodos `FAILED`.
+- `weekly-report` consulta DynamoDB pelo GSI `dataEnvio-index`, calcula indicadores semanais e usa tabela de controle. Somente `FAILED_BEFORE_SEND` permite retry automatico; `PROCESSING`, `SENT` e `FAILED_AFTER_SEND_ATTEMPT` bloqueiam nova execucao.
 - Em `infra/environments/dev`, somente a Lambda `weekly-report` recebe `AWS_ENDPOINT_URL`/credenciais fakecloud via Terraform porque e o unico app que hoje instancia clients AWS SDK diretamente. `feedback-api` e `critical-notifier` recebem variaveis de recurso, mas seus adapters atuais nao usam SDK real.
+
+Variaveis efetivamente consumidas pelo codigo Java:
+
+- `weekly-report`: `FEEDBACK_TABLE_NAME`, `PROCESSING_CONTROL_TABLE_NAME`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `AWS_ENDPOINT_URL` e `LOG_LEVEL`.
+- `feedback-api`: nenhuma variavel AWS e consumida pelos adapters atuais; `FEEDBACK_TABLE_NAME` e `CRITICAL_TOPIC_ARN` sao apenas injetadas pela infraestrutura/Makefile.
+- `critical-notifier`: `ADMIN_EMAIL_TO`, `EMAIL_FROM` e `PROCESSING_CONTROL_TABLE_NAME` sao injetadas pelo Terraform, mas nao consumidas pelo adapter no-op.
 
 ## Observabilidade e Operacao
 
@@ -213,6 +219,7 @@ Infraestrutura modelada:
 - Alarmes CloudWatch para `Errors` e `Throttles` de cada Lambda.
 - Alarmes para metricas customizadas `NotificationFailureCount` e `WeeklyReportFailureCount` no namespace `FeedbackPlatform`.
 - Dashboard `feedback-platform-<environment>` com metricas Lambda e metricas de negocio esperadas.
+- Os alarmes usam atualmente o mesmo topico SNS dos eventos de feedback critico. Como o notifier nao interpreta envelopes SNS nem mensagens CloudWatch, esse acoplamento e uma pendencia operacional critica.
 
 Codigo atual:
 
@@ -223,11 +230,16 @@ Codigo atual:
 
 ## Testes Visiveis
 
-- `UrgenciaClassifierTest`: limites da classificacao e rejeicao de notas fora de 0..10.
-- `FeedbackTest`: criacao, normalizacao, validacao de descricao, periodo, urgencia e correlation id.
-- `PeriodoIsoWeekTest`: semana ISO UTC e virada de ano.
-- `CriticalFeedbackEventTest`: validacao e normalizacao do evento critico.
-- `AvaliacaoResourceTest`: criacao minima via HTTP retornando `201` e urgencia `CRITICA`.
-- `HealthResourceTest`: `GET /health`.
-- `NotifyCriticalFeedbackUseCaseTest`: delegacao para gateway de e-mail.
-- `GenerateWeeklyReportUseCaseTest`: agregacoes semanais, periodo padrao, envio sem feedbacks, bloqueio de duplicidade e retry apenas para falha antes da tentativa de envio.
+- `shared-kernel`: classificacao e limites de urgencia, invariantes/normalizacao de `Feedback`, semana ISO UTC e evento critico.
+- `feedback-api`: sucesso `201`, health, geracao/reuso de correlation ID, validacoes `400`/`422`, JSON invalido, `404`/`415` preservados e erro interno `500`.
+- `critical-notifier`: apenas delegacao do use case para o gateway de e-mail.
+- `weekly-report`: agregacoes, periodo padrao UTC, envio sem feedbacks, bloqueio de duplicidade, retry antes do envio e bloqueio depois de tentativa ambigua.
+
+Nao existem classes `*IT.java`, medicao de cobertura, testes dos handlers Lambda, dos adapters AWS ou dos contratos reais SNS/Scheduler. `make test-it` esta preparado para Failsafe, mas hoje nao executa testes de integracao do projeto.
+
+## Referencias e Pendencias
+
+- Ambiente local: [`development-environment.md`](development-environment.md).
+- Deploy manual em AWS: [`aws-deployment.md`](aws-deployment.md).
+- Contrato HTTP: [`openapi-feedback-api.yaml`](openapi-feedback-api.yaml).
+- Pendencias, riscos e perguntas abertas: [`pendencias.md`](pendencias.md).

@@ -5,17 +5,16 @@ info:
   description: |
     API REST para registro de feedbacks de estudantes.
     A API recebe a descrição e a nota da avaliação, classifica automaticamente a urgência
-    e aciona o fluxo serverless de persistência e notificação quando necessário.
+    e aciona os ports de persistência e notificação quando necessário. No runtime atual,
+    esses ports usam adapters em memória/no-op; as integrações DynamoDB/SNS ainda estão pendentes.
 servers:
-  - url: https://{apiId}.execute-api.{region}.amazonaws.com/{stage}
-    description: API Gateway AWS
+  - url: https://{apiId}.execute-api.{region}.amazonaws.com
+    description: API Gateway AWS com stage $default
     variables:
       apiId:
         default: example
       region:
         default: us-east-1
-      stage:
-        default: dev
   - url: http://localhost:8080
     description: Execução local Quarkus
 
@@ -33,7 +32,7 @@ paths:
       summary: Registrar feedback de aula
       description: |
         Recebe um feedback, valida o payload, classifica a urgência com base na nota,
-        persiste no DynamoDB e aciona notificação para casos críticos.
+        registra pelo repository configurado e aciona o publisher para casos críticos.
       operationId: criarAvaliacao
       parameters:
         - $ref: "#/components/parameters/CorrelationId"
@@ -145,15 +144,6 @@ components:
                 message: valor permitido entre 0 e 10
     TooManyRequests:
       description: Limite de requisições excedido no API Gateway
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
-          example:
-            code: TOO_MANY_REQUESTS
-            message: Limite de requisições excedido. Tente novamente mais tarde.
-            correlationId: 58d4d37b-5072-40b3-8a33-3f5e89c1cd4d
-            details: []
     InternalServerError:
       description: Erro interno não esperado
       content:

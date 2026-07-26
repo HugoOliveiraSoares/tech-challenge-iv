@@ -75,7 +75,7 @@ Infraestrutura:
 
 Padrao observado: clean/hexagonal simples.
 
-- `core` nao deve depender de AWS SDK, API Gateway, Quarkus REST, JSON de transporte ou detalhes de Terraform.
+- `core` nao depende de AWS SDK, API Gateway, Quarkus REST, JSON de transporte ou Terraform. Ele usa CDI nos casos de uso e JBoss Logging/MDC no relatorio, portanto a separacao observada e de adapters, nao neutralidade total a frameworks.
 - `core/usecase` orquestra regra de aplicacao e depende de ports/interfaces, nao de adapters concretos.
 - `infra` contem detalhes de entrada/saida: HTTP, Lambda handlers, banco, SNS, SES e configuracao CDI.
 - `shared-kernel` pode ser usado por todos os apps, mas deve ficar restrito a conceitos estaveis de dominio e ports compartilhados.
@@ -117,13 +117,13 @@ Codigo atual:
 3. `NotifyCriticalFeedbackUseCase` delega para `EmailGateway`.
 4. `NoOpEmailGateway` registra log e nao envia e-mail.
 
-Ponto sensivel: o handler ainda nao processa o envelope real de SNS. Antes de integrar, definir se a entrada sera `SNSEvent`, um DTO proprio do envelope, ou uma camada adapter que extraia o payload publicado.
+Ponto sensivel: o handler nao processa o envelope real de SNS. Alem disso, alarmes CloudWatch publicam no mesmo topico dos feedbacks criticos. Antes de integrar, separar o canal operacional e definir um adapter que extraia/valide o payload de feedback do envelope SNS.
 
 ## Fluxo de Relatorio Semanal
 
 Infraestrutura modelada:
 
-1. Terraform agenda `weekly-report` com `cron(59 23 ? * SUN *)`.
+1. Terraform agenda `weekly-report` com `cron(59 23 ? * SUN *)` em UTC, sem configurar `target.input`.
 2. Terraform concede `dynamodb:Query`, `ses:SendEmail` e `ses:SendRawEmail`.
 3. DynamoDB expoe GSI `dataEnvio-index` para consultar por `periodo` e ordenar por `dataEnvio`.
 
@@ -133,20 +133,21 @@ Codigo atual:
 2. Handler cria `WeeklyReportRequest`.
 3. `GenerateWeeklyReportUseCase` resolve o `periodo`, aplica idempotencia, consulta feedbacks, calcula media geral, contagens por dia/urgencia, lista feedbacks criticos e envia o relatorio.
 4. `DynamoDbWeeklyFeedbackReader` consulta o GSI `dataEnvio-index` por `periodo`.
-5. `DynamoDbWeeklyReportIdempotencyGateway` registra o processamento em `feedback-processing-control-<environment>`, bloqueia periodos `SENT` e permite retry de periodos `FAILED`.
+5. `DynamoDbWeeklyReportIdempotencyGateway` registra o processamento em `feedback-processing-control-<environment>`; apenas `FAILED_BEFORE_SEND` permite retry. `PROCESSING`, `SENT` e `FAILED_AFTER_SEND_ATTEMPT` bloqueiam nova execucao.
 6. `SesReportEmailGateway` envia o relatorio por SES.
 
 Lacunas arquiteturais:
 
 - Falta teste de integracao contra DynamoDB/SES local.
 - O `feedback-api` ainda nao grava em DynamoDB; portanto, em execucao integrada local, o `weekly-report` depende de dados semeados por script ou inseridos diretamente na tabela fakecloud.
+- O contrato Scheduler -> handler nao esta validado: o Scheduler nao envia payload explicito, enquanto o handler aceita um record proprio opcional. Com entrada nula/vazia, o use case calcula a semana atual em UTC.
 
 ## Padroes Recorrentes
 
 - Records Java para dados imutaveis simples (`Feedback`, comandos, requests, outputs, eventos).
 - Construtores compactos em records de dominio para validar invariantes.
 - Interfaces `Gateway`/`Repository`/`Publisher` como ports de saida.
-- Use cases pequenos e sem dependencia direta de frameworks externos.
+- Use cases pequenos, dependentes de ports; CDI e logging ainda aparecem no `core`.
 - Adapters temporarios nomeados como `InMemory...` ou `NoOp...` para tornar lacunas explicitas.
 - Adapters AWS reais em `weekly-report` mantem SDK e variaveis de ambiente fora do use case.
 - Recursos HTTP usam records internos para request/response enquanto nao ha DTO compartilhado estavel.
@@ -160,7 +161,7 @@ Lacunas arquiteturais:
 - Health check: `GET /health`.
 - Pacotes: `br.com.fiap.feedbackapi`, `br.com.fiap.criticalnotifier`, `br.com.fiap.weeklyreport`, `br.com.fiap.feedbackplatform.shared`.
 - Recursos Terraform: `feedback-api-<environment>`, `critical-notifier-<environment>`, `weekly-report-<environment>`, `feedbacks-<environment>`, `feedback-processing-control-<environment>`, `feedback-critical-topic-<environment>`.
-- Variaveis de ambiente de runtime: `FEEDBACK_TABLE_NAME`, `PROCESSING_CONTROL_TABLE_NAME`, `CRITICAL_TOPIC_ARN`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `LOG_LEVEL`.
+- Variaveis consumidas por `weekly-report`: `FEEDBACK_TABLE_NAME`, `PROCESSING_CONTROL_TABLE_NAME`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `AWS_ENDPOINT_URL` e `LOG_LEVEL`. As variaveis AWS injetadas nos outros dois apps ainda nao sao consumidas por seus adapters no-op/in-memory.
 - `periodo` usa formato ISO week UTC `AAAA-Www`, por exemplo `2026-W01`; o cadastro de feedback e o relatorio semanal seguem a mesma convencao.
 
 ## Regras para Evoluir Sem Quebrar o Desenho
@@ -177,9 +178,12 @@ Lacunas arquiteturais:
 
 - `feedback-api` e `critical-notifier` ainda usam adapters placeholder para DynamoDB/SNS/SES.
 - `shared-kernel` ja contem dominio e ports compartilhados; evitar transforma-lo em deposito de DTOs de transporte.
-- `critical-notifier` e `weekly-report` usam inputs simplificados que nao correspondem aos envelopes reais de SNS/EventBridge.
+- `critical-notifier` e incompativel com o envelope SNS real. No relatorio, falta validar o contrato entre o payload efetivo do EventBridge Scheduler e o input proprio do handler.
 - `weekly-report` usa `Query` por `periodo` no GSI; a tabela de controle evita envios duplicados por periodo.
 - Falhas do relatorio semanal apos iniciar a tentativa de envio sao tratadas como ambiguas e bloqueiam retry automatico; reprocessamento exige reset manual do controle do periodo.
+- Um estado `PROCESSING` nao possui lease/TTL ou recuperacao automatica e pode bloquear um periodo indefinidamente apos crash.
 - `infra/environments/dev/` e somente para fakecloud/local. Nao copiar credenciais/endpoints locais para `prod`.
 - Alarmes/dashboard esperam metricas customizadas ainda nao publicadas.
 - Nao ha DLQ para fluxos assincronos.
+
+Detalhes acionaveis e perguntas de decisao estao centralizados em [`pendencias.md`](pendencias.md).

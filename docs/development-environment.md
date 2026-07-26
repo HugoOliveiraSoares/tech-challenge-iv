@@ -111,10 +111,14 @@ AWS_SECRET_ACCESS_KEY=test
 AWS_REGION=us-east-1
 AWS_ENDPOINT_URL=http://localhost:4566
 FEEDBACK_TABLE_NAME=feedbacks-dev
+PROCESSING_CONTROL_TABLE_NAME=feedback-processing-control-dev
 CRITICAL_TOPIC_ARN=arn:aws:sns:us-east-1:000000000000:feedback-critical-topic-dev
 ADMIN_EMAIL_TO=admin@example.com
 EMAIL_FROM=no-reply@example.com
+LOG_LEVEL=INFO
 ```
+
+Atencao: `make env`/`scripts/local-env.sh` ainda nao imprime `PROCESSING_CONTROL_TABLE_NAME` nem `LOG_LEVEL`. Os valores acima seguem os nomes definidos pelo Terraform e sao necessarios para executar `weekly-report` diretamente fora da Lambda provisionada.
 
 ## Fluxo Rapido
 
@@ -153,7 +157,7 @@ Executar smoke test:
 make smoke
 ```
 
-O smoke test usa o output `api_base_url` do Terraform quando ele existe. Se o output nao estiver disponivel, usa `API_BASE_URL` ou `http://localhost:8080` como fallback. O Terraform administra o stage `$default`, mantendo as rotas Quarkus em `/avaliacao` e `/health` sem prefixo de ambiente.
+O smoke test usa o output `api_base_url` do Terraform quando ele existe. Se o output nao estiver disponivel, usa `API_BASE_URL` ou `http://localhost:8080` como fallback. O modulo Terraform declara o stage `$default`; apos o apply, `scripts/fakecloud-default-stage.sh` garante esse stage no fakecloud, mantendo `/avaliacao` e `/health` sem prefixo.
 
 ## Estado Atual Das Integracoes
 

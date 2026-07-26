@@ -37,7 +37,7 @@ Implementadas no codigo atual:
 - `id` e gerado pelo backend como UUID.
 - `dataEnvio` e gerada pelo backend a partir de `Clock`.
 - `periodo` e calculado por semana ISO em UTC.
-- `correlationId` em branco vira `null`; quando informado, e trimado.
+- O filtro HTTP gera um UUID quando `X-Correlation-Id` esta ausente/em branco e valida comprimento de 8 a 100 caracteres. O dominio trima o valor, mas o header de resposta preserva o texto recebido.
 - Feedback `CRITICA` passa pelo port `CriticalFeedbackPublisher`.
 
 Planejadas/modeladas, mas ainda incompletas no runtime Java:
@@ -98,8 +98,9 @@ Estado atual:
 - Handler aceita `periodo` em input simples.
 - `DynamoDbWeeklyFeedbackReader` consulta feedbacks por `periodo` no GSI `dataEnvio-index`.
 - `GenerateWeeklyReportUseCase` calcula media, contadores por dia, contadores por urgencia e lista de criticos.
-- `DynamoDbWeeklyReportIdempotencyGateway` evita reenvio de periodo ja enviado e permite reprocessar periodo marcado como `FAILED`.
+- `DynamoDbWeeklyReportIdempotencyGateway` evita reenvio de periodo ja enviado e permite reprocessar somente `FAILED_BEFORE_SEND`; falhas depois de iniciar a tentativa de envio exigem intervencao manual.
 - `SesReportEmailGateway` envia o relatorio semanal por SES.
+- O e-mail inclui a descricao completa de cada feedback e repete os criticos em uma secao destacada.
 - Em ambiente local, esse fluxo deve usar `infra/environments/dev/` somente com fakecloud; dados de exemplo podem ser semeados por `make seed-feedbacks-dev`.
 
 Estado esperado:
@@ -116,6 +117,8 @@ Estado esperado:
 - E-mails dependem de identidades SES verificadas, especialmente em sandbox.
 - `descricao` e texto livre e pode conter dados pessoais; evitar logar descricoes completas ate haver politica clara de privacidade.
 - Dados sensiveis nao devem ser incluidos em metricas, alarmes ou logs.
+
+Pendencias de produto, privacidade e operacao estao em [`pendencias.md`](pendencias.md).
 
 ## Criterios de Aceite Visiveis
 
