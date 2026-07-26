@@ -1,7 +1,7 @@
 package br.com.fiap.criticalnotifier.core.gateway;
 
-import br.com.fiap.feedbackplatform.shared.domain.CriticalFeedbackEvent;
+import br.com.fiap.criticalnotifier.core.domain.CriticalNotificationEmail;
 
 public interface EmailGateway {
-    void sendCriticalFeedbackNotification(CriticalFeedbackEvent event);
+    void sendCriticalNotification(CriticalNotificationEmail email);
 }
