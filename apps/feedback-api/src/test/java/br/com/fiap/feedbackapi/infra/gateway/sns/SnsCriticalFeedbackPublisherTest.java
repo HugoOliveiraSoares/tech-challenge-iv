@@ -20,10 +20,8 @@ import software.amazon.awssdk.services.sns.model.SnsException;
 import java.time.Instant;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SnsCriticalFeedbackPublisherTest {
@@ -75,14 +73,19 @@ class SnsCriticalFeedbackPublisherTest {
     @Test
     void deveLancarNotificationExceptionQuandoFalharSerializacao() throws JsonProcessingException {
         var event = criarEvento();
+        var jsonException = new JsonProcessingException("Erro de serializacao"){};
 
         when(objectMapper.writeValueAsString(event))
-                .thenThrow(new JsonProcessingException("Serialization error") {});
+                .thenThrow(jsonException);
 
-        assertThrows(NotificationException.class,
+        NotificationException exception = assertThrows(NotificationException.class,
                 ()-> publisher.publish(event));
 
+        assertEquals("Falha ao serializar evento de feedback critico", exception.getMessage());
+        assertSame(jsonException, exception.getCause());
+
         verify(objectMapper).writeValueAsString(event);
+        verifyNoMoreInteractions(snsClient);
     }
 
     @Test
@@ -93,16 +96,24 @@ class SnsCriticalFeedbackPublisherTest {
                     "eventType": "FeedbackCritico"
                 }
                 """;
+        var snsException = SnsException.builder()
+                .message("SNS indisponivel")
+                .build();
 
         when(objectMapper.writeValueAsString(event))
                 .thenReturn(eventJson);
         when(snsClient.publish(ArgumentMatchers.any(PublishRequest.class)))
-                .thenThrow(SnsException.builder()
-                        .message("SNS unavailable")
-                        .build());
+                .thenThrow(snsException);
 
-        assertThrows(NotificationException.class,
+        NotificationException exception = assertThrows(NotificationException.class,
                 ()-> publisher.publish(event));
+
+        assertEquals("Falha ao publicar evento de feedback critico", exception.getMessage());
+        assertSame(snsException, exception.getCause());
+
+        verify(objectMapper).writeValueAsString(event);
+        verify(snsClient).publish(ArgumentMatchers.any(PublishRequest.class));
+        verifyNoMoreInteractions(snsClient);
     }
 
     private CriticalFeedbackEvent criarEvento() {
