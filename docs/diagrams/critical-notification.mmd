@@ -1,0 +1,11 @@
+sequenceDiagram
+    autonumber
+    participant SNS as SNS Topic
+    participant Lambda as critical-notifier
+    participant SES as Amazon SES
+    participant Admin as Administrador
+
+    SNS->>Lambda: Evento FeedbackCritico
+    Lambda->>Lambda: Monta a mensagem de urgência
+    Lambda->>SES: Solicita o envio do e-mail
+    SES-->>Admin: Entrega a notificação

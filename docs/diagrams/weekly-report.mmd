@@ -1,0 +1,14 @@
+sequenceDiagram
+    autonumber
+    participant Scheduler as EventBridge
+    participant Lambda as weekly-report
+    participant DB as DynamoDB
+    participant SES as Amazon SES
+    participant Admin as Administrador
+
+    Scheduler->>Lambda: Executa a rotina semanal
+    Lambda->>DB: Consulta feedbacks do período
+    DB-->>Lambda: Retorna os registros
+    Lambda->>Lambda: Calcula média e agrupamentos
+    Lambda->>SES: Envia o relatório consolidado
+    SES-->>Admin: Entrega o e-mail semanal

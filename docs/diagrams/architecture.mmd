@@ -1,0 +1,30 @@
+flowchart LR
+    Client[Cliente / Estudante] --> APIGW[API Gateway]
+    APIGW --> FeedbackLambda[Lambda feedback-api]
+
+    FeedbackLambda --> DynamoDB[(DynamoDB feedbacks)]
+    FeedbackLambda --> Decision{Urgência crítica?}
+
+    Decision -- Sim --> SNSTopic[SNS feedback-critical-topic]
+    Decision -- Não --> Finish[Retorna 201]
+
+    SNSTopic --> NotifierLambda[Lambda critical-notifier]
+    NotifierLambda --> SES[Amazon SES]
+    SES --> AdminEmail[E-mail do administrador]
+
+    Scheduler[EventBridge Scheduler] --> ReportLambda[Lambda weekly-report]
+    ReportLambda --> DynamoDB
+    ReportLambda --> SES
+
+    FeedbackLambda -. logs .-> CloudWatch[CloudWatch]
+    NotifierLambda -. logs .-> CloudWatch
+    ReportLambda -. logs .-> CloudWatch
+
+    classDef entry fill:#153044,stroke:#25C2D4,color:#F5F8FA,stroke-width:2px;
+    classDef event fill:#153044,stroke:#FF9D3D,color:#F5F8FA,stroke-width:2px;
+    classDef critical fill:#1F2637,stroke:#FF667A,color:#F5F8FA,stroke-width:2px;
+    classDef operation fill:#153044,stroke:#52D39A,color:#F5F8FA,stroke-width:2px;
+    class Client,APIGW,FeedbackLambda entry;
+    class DynamoDB,Decision,SNSTopic,Scheduler,ReportLambda event;
+    class NotifierLambda,SES,AdminEmail critical;
+    class CloudWatch operation;

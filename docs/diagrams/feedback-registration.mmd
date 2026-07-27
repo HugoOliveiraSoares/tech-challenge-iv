@@ -1,0 +1,19 @@
+sequenceDiagram
+    autonumber
+    participant Cliente
+    participant APIGW as API Gateway
+    participant Lambda as feedback-api
+    participant DB as DynamoDB
+    participant SNS as SNS
+
+    Cliente->>APIGW: POST /avaliacao
+    APIGW->>Lambda: Encaminha a requisição
+    Lambda->>Lambda: Valida e classifica a urgência
+    Lambda->>DB: Persiste o feedback
+
+    alt Urgência CRÍTICA
+        Lambda->>SNS: Publica o evento crítico
+    end
+
+    Lambda-->>APIGW: 201 Created
+    APIGW-->>Cliente: Resposta JSON
