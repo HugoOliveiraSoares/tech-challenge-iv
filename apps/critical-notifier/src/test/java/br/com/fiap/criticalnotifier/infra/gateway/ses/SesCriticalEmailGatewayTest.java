@@ -1,6 +1,7 @@
 package br.com.fiap.criticalnotifier.infra.gateway.ses;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -8,15 +9,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import br.com.fiap.criticalnotifier.core.domain.CriticalNotificationEmail;
+import br.com.fiap.criticalnotifier.core.exception.EmailSendAmbiguousException;
+import br.com.fiap.criticalnotifier.core.exception.EmailSendRetryableException;
+import java.net.SocketTimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.ses.SesClient;
 import software.amazon.awssdk.services.ses.model.SendEmailRequest;
 import software.amazon.awssdk.services.ses.model.SendEmailResponse;
+import software.amazon.awssdk.services.ses.model.SesException;
 
 @ExtendWith(MockitoExtension.class)
 class SesCriticalEmailGatewayTest {
@@ -52,16 +58,34 @@ class SesCriticalEmailGatewayTest {
     }
 
     @Test
-    void propagaFalhaSesSemExporSegredos() {
-        doThrow(new RuntimeException("Service unavailable"))
+    void traduzFalhaRetryableDoSes() {
+        doThrow(SesException.builder().statusCode(503).message("Service unavailable").build())
                 .when(sesClient)
                 .sendEmail(any(SendEmailRequest.class));
 
         CriticalNotificationEmail email = new CriticalNotificationEmail("Assunto", "Corpo");
 
-        RuntimeException exception =
-                assertThrows(RuntimeException.class, () -> gateway.sendCriticalNotification(email));
+        EmailSendRetryableException exception = assertThrows(
+                EmailSendRetryableException.class, () -> gateway.sendCriticalNotification(email));
 
-        assertEquals("Service unavailable", exception.getMessage());
+        assertEquals("SES rejected the request before acceptance.", exception.getMessage());
+    }
+
+    @Test
+    void traduzTimeoutComoFalhaAmbigua() {
+        doThrow(SdkClientException.builder()
+                        .message("Request timed out")
+                        .cause(new SocketTimeoutException("Read timed out"))
+                        .build())
+                .when(sesClient)
+                .sendEmail(any(SendEmailRequest.class));
+
+        CriticalNotificationEmail email = new CriticalNotificationEmail("Assunto", "Corpo");
+
+        EmailSendAmbiguousException exception = assertThrows(
+                EmailSendAmbiguousException.class, () -> gateway.sendCriticalNotification(email));
+
+        assertEquals("SES request timed out with indeterminate result.", exception.getMessage());
+        assertInstanceOf(SocketTimeoutException.class, exception.getCause().getCause());
     }
 }
