@@ -113,7 +113,10 @@ module "critical_notifier_lambda" {
 
   environment_variables = {
     ADMIN_EMAIL_TO                = var.admin_email_to
+    AWS_ACCESS_KEY_ID             = local.fakecloud_access_key
+    AWS_ENDPOINT_URL              = local.fakecloud_endpoint
     AWS_REGION                    = var.aws_region
+    AWS_SECRET_ACCESS_KEY         = local.fakecloud_secret_key
     EMAIL_FROM                    = var.email_from
     LOG_LEVEL                     = var.log_level
     PROCESSING_CONTROL_TABLE_NAME = module.dynamodb.processing_control_table_name
