@@ -15,7 +15,7 @@ O projeto usa Java 21, Quarkus, Terraform e serviços AWS, com suporte a execuç
 
 ## Estado Atual
 
-O repositório já possui aplicações Java/Quarkus multi-módulo, contrato OpenAPI, testes automatizados e infraestrutura Terraform. As integrações AWS reais ainda não estão conectadas nos adapters Java: a API persiste em memória e os fluxos SNS/SES usam implementações no-op.
+O repositório já possui aplicações Java/Quarkus multi-módulo, contrato OpenAPI, testes automatizados e infraestrutura Terraform. Os `critical-notifier` e `weekly-report` possuem testes de integração reais contra fakecloud via Testcontainers, exercitando DynamoDB e SES. A API de feedback ainda persiste em memória e os fluxos SNS/SES usam implementações no-op; o pipeline `POST -> DynamoDB -> SNS -> notifier` permanece adiado.
 
 ## Desenvolvimento Local
 
@@ -24,14 +24,28 @@ O guia completo de ambiente local está em [`docs/development-environment.md`](d
 Comandos principais:
 
 ```bash
-make help
-make dev
-make local-up
-make smoke
-make test
-make test-it
-make local-down
+make help          # Lista todos os comandos disponíveis
+make test          # Testes unitários (Docker-free, Surefire)
+make test-it       # Testes de integração (Testcontainers, requer Docker)
+make e2e           # Validação E2E contra fakecloud persistente + Terraform
+make dev           # Quarkus dev mode com fakecloud
+make local-up      # Empacota Lambdas + Terraform apply
+make smoke         # Smoke test rápido contra API
+make verify        # Suite completa: test + package + openapi + terraform
+make local-down    # Destrói stack local e para containers
 ```
+
+### Níveis de Teste
+
+| Nível | Comando | Lifecycle | Docker | Escopo |
+|-------|---------|-----------|--------|--------|
+| Unitário | `make test` | Surefire | Não | Domínio, use cases, adapters mock, HTTP contract |
+| Integração | `make test-it` | Failsafe + Testcontainers | Sim | DynamoDB real, SES real, ciclo completo do Lambda |
+| E2E | `make e2e` | Script externo | Sim | API HTTP, notifier Lambda, weekly report, DynamoDB, SES |
+
+- **Unitários**: executam `*Test.java`, excluem `*IT.java`, não precisam de Docker.
+- **Integração**: executam `*IT.java` via `./mvnw -B verify -Pintegration-test`; Testcontainers inicia e para o fakecloud automaticamente.
+- **E2E**: usam `make local-up` (fakecloud persistente + Terraform) e chamadas HTTP/Lambda diretas. O fluxo unificado `POST -> DynamoDB -> SNS -> notifier` permanece adiado até adapters reais existirem.
 
 ## Documentação
 

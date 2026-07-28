@@ -56,7 +56,9 @@ class SesCriticalEmailGatewayTest {
         assertEquals("no-reply@example.com", request.source());
         assertEquals("admin@example.com", request.destination().toAddresses().getFirst());
         assertEquals("ALERTA: Feedback critico recebido", request.message().subject().data());
+        assertEquals("UTF-8", request.message().subject().charset());
         assertEquals("Corpo do alerta", request.message().body().text().data());
+        assertEquals("UTF-8", request.message().body().text().charset());
     }
 
     @Test
@@ -132,6 +134,21 @@ class SesCriticalEmailGatewayTest {
                 () -> gateway.sendCriticalNotification(new CriticalNotificationEmail("Assunto", "Corpo")));
 
         assertEquals("SES returned an indeterminate failure.", exception.getMessage());
+    }
+
+    @Test
+    void preservaCausaOriginalEmFalhaAmbiguaSes() {
+        SesException sesException = (SesException) SesException.builder()
+                .statusCode(503)
+                .message("Service unavailable")
+                .build();
+        doThrow(sesException).when(sesClient).sendEmail(any(SendEmailRequest.class));
+
+        EmailSendAmbiguousException exception = assertThrows(
+                EmailSendAmbiguousException.class,
+                () -> gateway.sendCriticalNotification(new CriticalNotificationEmail("Assunto", "Corpo")));
+
+        assertInstanceOf(SesException.class, exception.getCause());
     }
 
     private SesException throttlingException() {

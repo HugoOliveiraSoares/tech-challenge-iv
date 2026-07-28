@@ -65,8 +65,8 @@ test-weekly-report: ## Run weekly-report tests and required modules.
 $(TEST_APP_TARGETS):
 	$(MAVEN) -pl apps/$(patsubst test-%,%,$@) -am test
 
-test-it: fakecloud-up ## Run integration-test lifecycle against local fakecloud when *IT tests exist.
-	$(LOCAL_AWS_ENV) $(MAVEN) verify -Pintegration-test
+test-it: ## Run integration-test lifecycle via Testcontainers (Docker required, no fakecloud-up needed).
+	$(MAVEN) verify -Pintegration-test
 
 package: ## Build Lambda artifacts expected by Terraform.
 	$(MAVEN) clean package
@@ -136,5 +136,8 @@ local-down: terraform-dev-destroy fakecloud-down ## Destroy local dev stack and 
 
 smoke: ## Run a local smoke test against Terraform output or localhost:8080.
 	./scripts/smoke-local.sh
+
+e2e: local-up ## Run E2E validation against the persistent fakecloud and Terraform stack.
+	./scripts/e2e-local.sh
 
 verify: test package openapi-validate terraform-fmt terraform-dev-validate ## Run the main local verification suite.

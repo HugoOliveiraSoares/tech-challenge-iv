@@ -4,6 +4,7 @@ import br.com.fiap.feedbackapi.infra.http.CorrelationIdProvider;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.Context;
@@ -32,10 +33,17 @@ public class JsonExceptionMappers {
         return JsonErrorResponseFactory.invalidFormat(exception, correlationId);
     }
 
+    @ServerExceptionMapper(MismatchedInputException.class)
+    public Response mapMismatchedInputException(MismatchedInputException exception) {
+        var correlationId = CorrelationIdProvider.get(requestContext);
+
+        return JsonErrorResponseFactory.invalidMapping(exception, correlationId);
+    }
+
     @ServerExceptionMapper
     public Response mapJsonMappingException(JsonMappingException exception){
         var correlationId = CorrelationIdProvider.get(requestContext);
 
-        return JsonErrorResponseFactory.invalidMapping(correlationId);
+        return JsonErrorResponseFactory.invalidMapping(exception, correlationId);
     }
 }

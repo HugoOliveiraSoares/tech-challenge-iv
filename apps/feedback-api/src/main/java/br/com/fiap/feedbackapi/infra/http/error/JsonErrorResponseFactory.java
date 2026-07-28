@@ -1,5 +1,6 @@
 package br.com.fiap.feedbackapi.infra.http.error;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import jakarta.ws.rs.core.Response;
 
@@ -33,11 +34,13 @@ public final class JsonErrorResponseFactory {
                 .build();
     }
 
-    public static Response invalidMapping(String correlationId){
+    public static Response invalidMapping(JsonMappingException exception, String correlationId){
+        var fieldName = exception.getPath().isEmpty() ? null : exception.getPath().getLast().getFieldName();
+
         var body = new ApiErrorResponse("VALIDATION_ERROR",
                 "Campo com tipo inválido no corpo da requisição",
                 correlationId,
-                List.of());
+                List.of(new ApiErrorDetail(fieldName, "tipo inválido")));
 
         return Response.status(Response.Status.BAD_REQUEST)
                 .entity(body)

@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import br.com.fiap.criticalnotifier.core.domain.CriticalNotificationEmail;
 import br.com.fiap.criticalnotifier.core.domain.CriticalNotificationEmailComposer;
@@ -62,6 +65,22 @@ class NotifyCriticalFeedbackUseCaseTest {
 
         assertEquals(NotificationResult.SKIPPED, secondAttempt);
         assertEquals(1, emailGateway.sentEmails.size());
+    }
+
+    @Test
+    void naoCompoeEmailQuandoIdempotenciaBloqueiaEvento() {
+        NotificationIdempotencyGateway idempotencyGateway = mock(NotificationIdempotencyGateway.class);
+        CriticalNotificationEmailComposer emailComposer = mock(CriticalNotificationEmailComposer.class);
+        EmailGateway emailGateway = mock(EmailGateway.class);
+        when(idempotencyGateway.tryStart(FEEDBACK_ID)).thenReturn(Optional.empty());
+        NotifyCriticalFeedbackUseCase useCase =
+                new NotifyCriticalFeedbackUseCase(idempotencyGateway, emailComposer, emailGateway);
+
+        NotificationResult result = useCase.execute(sampleEvent());
+
+        assertEquals(NotificationResult.SKIPPED, result);
+        verify(idempotencyGateway).tryStart(FEEDBACK_ID);
+        verifyNoInteractions(emailComposer, emailGateway);
     }
 
     @Test
