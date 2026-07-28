@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import br.com.fiap.criticalnotifier.core.domain.CriticalNotificationEmail;
 import br.com.fiap.criticalnotifier.core.exception.EmailSendAmbiguousException;
 import br.com.fiap.criticalnotifier.core.exception.EmailSendRetryableException;
+import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.ses.SesClient;
 import software.amazon.awssdk.services.ses.model.SendEmailRequest;
@@ -58,8 +60,8 @@ class SesCriticalEmailGatewayTest {
     }
 
     @Test
-    void traduzFalhaRetryableDoSes() {
-        doThrow(SesException.builder().statusCode(503).message("Service unavailable").build())
+    void traduzThrottlingHttp400ComoFalhaRetryable() {
+        doThrow(throttlingException())
                 .when(sesClient)
                 .sendEmail(any(SendEmailRequest.class));
 
@@ -69,6 +71,19 @@ class SesCriticalEmailGatewayTest {
                 EmailSendRetryableException.class, () -> gateway.sendCriticalNotification(email));
 
         assertEquals("SES rejected the request before acceptance.", exception.getMessage());
+    }
+
+    @Test
+    void traduzHttp503SemThrottlingComoFalhaAmbigua() {
+        doThrow(SesException.builder().statusCode(503).message("Service unavailable").build())
+                .when(sesClient)
+                .sendEmail(any(SendEmailRequest.class));
+
+        EmailSendAmbiguousException exception = assertThrows(
+                EmailSendAmbiguousException.class,
+                () -> gateway.sendCriticalNotification(new CriticalNotificationEmail("Assunto", "Corpo")));
+
+        assertEquals("SES returned an indeterminate failure.", exception.getMessage());
     }
 
     @Test
@@ -85,7 +100,49 @@ class SesCriticalEmailGatewayTest {
         EmailSendAmbiguousException exception = assertThrows(
                 EmailSendAmbiguousException.class, () -> gateway.sendCriticalNotification(email));
 
-        assertEquals("SES request timed out with indeterminate result.", exception.getMessage());
+        assertEquals("SES client failed with indeterminate result.", exception.getMessage());
         assertInstanceOf(SocketTimeoutException.class, exception.getCause().getCause());
+    }
+
+    @Test
+    void traduzConnectionResetComoFalhaAmbigua() {
+        doThrow(SdkClientException.builder()
+                        .message("Connection reset")
+                        .cause(new ConnectException("Connection reset"))
+                        .build())
+                .when(sesClient)
+                .sendEmail(any(SendEmailRequest.class));
+
+        EmailSendAmbiguousException exception = assertThrows(
+                EmailSendAmbiguousException.class,
+                () -> gateway.sendCriticalNotification(new CriticalNotificationEmail("Assunto", "Corpo")));
+
+        assertEquals("SES client failed with indeterminate result.", exception.getMessage());
+        assertInstanceOf(ConnectException.class, exception.getCause().getCause());
+    }
+
+    @Test
+    void traduzHttp4xxSemThrottlingComoFalhaAmbigua() {
+        doThrow(SesException.builder().statusCode(400).message("Invalid request").build())
+                .when(sesClient)
+                .sendEmail(any(SendEmailRequest.class));
+
+        EmailSendAmbiguousException exception = assertThrows(
+                EmailSendAmbiguousException.class,
+                () -> gateway.sendCriticalNotification(new CriticalNotificationEmail("Assunto", "Corpo")));
+
+        assertEquals("SES returned an indeterminate failure.", exception.getMessage());
+    }
+
+    private SesException throttlingException() {
+        return (SesException) SesException.builder()
+                .statusCode(400)
+                .awsErrorDetails(AwsErrorDetails.builder()
+                        .serviceName("SES")
+                        .errorCode("Throttling")
+                        .errorMessage("Maximum sending rate exceeded")
+                        .build())
+                .message("Maximum sending rate exceeded")
+                .build();
     }
 }

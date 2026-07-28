@@ -2,6 +2,9 @@ package br.com.fiap.criticalnotifier.core.usecase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 import br.com.fiap.criticalnotifier.core.domain.CriticalNotificationEmail;
 import br.com.fiap.criticalnotifier.core.domain.CriticalNotificationEmailComposer;
@@ -11,8 +14,10 @@ import br.com.fiap.criticalnotifier.core.exception.EmailSendRetryableException;
 import br.com.fiap.criticalnotifier.core.gateway.EmailGateway;
 import br.com.fiap.criticalnotifier.core.gateway.NotificationIdempotencyGateway;
 import br.com.fiap.criticalnotifier.core.usecase.NotifyCriticalFeedbackUseCase.NotificationResult;
+import br.com.fiap.criticalnotifier.infra.gateway.ses.SesCriticalEmailGateway;
 import br.com.fiap.feedbackplatform.shared.domain.CriticalFeedbackEvent;
 import br.com.fiap.feedbackplatform.shared.domain.Urgencia;
+import java.net.SocketTimeoutException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,6 +26,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.services.ses.SesClient;
+import software.amazon.awssdk.services.ses.model.SendEmailRequest;
+import software.amazon.awssdk.services.ses.model.SesException;
 
 class NotifyCriticalFeedbackUseCaseTest {
     private static final UUID FEEDBACK_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -76,15 +86,17 @@ class NotifyCriticalFeedbackUseCaseTest {
     }
 
     @Test
-    void permiteRetryQuandoSesFalhaAntesDaAceitacao() {
+    void permiteRetryQuandoThrottlingSesEsgotaTentativas() {
         InMemoryIdempotencyGateway idempotencyGateway = new InMemoryIdempotencyGateway();
-        RetryableFailingEmailGateway failingGateway = new RetryableFailingEmailGateway();
+        SesClient sesClient = mock(SesClient.class);
+        doThrow(throttlingException()).when(sesClient).sendEmail(any(SendEmailRequest.class));
+        EmailGateway failingGateway = new SesCriticalEmailGateway(
+                sesClient, "admin@example.com", "no-reply@example.com");
         NotifyCriticalFeedbackUseCase useCase = newUseCase(idempotencyGateway, failingGateway);
         CriticalFeedbackEvent event = sampleEvent();
 
         assertThrows(EmailSendRetryableException.class, () -> useCase.execute(event));
         assertEquals("FAILED_BEFORE_SEND", idempotencyGateway.statusByFeedbackId.get(FEEDBACK_ID));
-        assertEquals(1, failingGateway.attempts);
 
         RecordingEmailGateway successGateway = new RecordingEmailGateway();
         NotifyCriticalFeedbackUseCase retryUseCase = newUseCase(idempotencyGateway, successGateway);
@@ -127,9 +139,32 @@ class NotifyCriticalFeedbackUseCaseTest {
     }
 
     @Test
-    void bloqueiaRetryQuandoFalhaDepoisDaTentativaDeEnvio() {
+    void bloqueiaRetryQuandoSesRetornaHttp5xx() {
+        SesClient sesClient = mock(SesClient.class);
+        doThrow(SesException.builder().statusCode(503).message("Service unavailable").build())
+                .when(sesClient)
+                .sendEmail(any(SendEmailRequest.class));
+
+        assertFalhaAmbiguaBloqueiaRetry(new SesCriticalEmailGateway(
+                sesClient, "admin@example.com", "no-reply@example.com"));
+    }
+
+    @Test
+    void bloqueiaRetryQuandoSesTemFalhaDeTransporte() {
+        SesClient sesClient = mock(SesClient.class);
+        doThrow(SdkClientException.builder()
+                        .message("Request timed out")
+                        .cause(new SocketTimeoutException("Read timed out"))
+                        .build())
+                .when(sesClient)
+                .sendEmail(any(SendEmailRequest.class));
+
+        assertFalhaAmbiguaBloqueiaRetry(new SesCriticalEmailGateway(
+                sesClient, "admin@example.com", "no-reply@example.com"));
+    }
+
+    private void assertFalhaAmbiguaBloqueiaRetry(EmailGateway failingGateway) {
         InMemoryIdempotencyGateway idempotencyGateway = new InMemoryIdempotencyGateway();
-        AmbiguousFailingEmailGateway failingGateway = new AmbiguousFailingEmailGateway();
         NotifyCriticalFeedbackUseCase useCase = newUseCase(idempotencyGateway, failingGateway);
         CriticalFeedbackEvent event = sampleEvent();
 
@@ -142,6 +177,17 @@ class NotifyCriticalFeedbackUseCaseTest {
 
         assertEquals(NotificationResult.SKIPPED, result);
         assertEquals(0, successGateway.sentEmails.size());
+    }
+
+    private SesException throttlingException() {
+        return (SesException) SesException.builder()
+                .statusCode(400)
+                .awsErrorDetails(AwsErrorDetails.builder()
+                        .serviceName("SES")
+                        .errorCode("Throttling")
+                        .errorMessage("Maximum sending rate exceeded")
+                        .build())
+                .build();
     }
 
     private NotifyCriticalFeedbackUseCase newUseCase(
@@ -230,23 +276,6 @@ class NotifyCriticalFeedbackUseCaseTest {
         @Override
         public void sendCriticalNotification(CriticalNotificationEmail email) {
             sentEmails.add(email);
-        }
-    }
-
-    private static class RetryableFailingEmailGateway implements EmailGateway {
-        private int attempts;
-
-        @Override
-        public void sendCriticalNotification(CriticalNotificationEmail email) {
-            attempts++;
-            throw new EmailSendRetryableException("SES unavailable", new IllegalStateException("SES unavailable"));
-        }
-    }
-
-    private static class AmbiguousFailingEmailGateway implements EmailGateway {
-        @Override
-        public void sendCriticalNotification(CriticalNotificationEmail email) {
-            throw new EmailSendAmbiguousException("SES timeout", new IllegalStateException("SES timeout"));
         }
     }
 

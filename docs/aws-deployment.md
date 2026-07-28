@@ -127,3 +127,5 @@ terraform -chdir=infra/environments/prod apply \
 - Credenciais exportadas por `aws login` sao temporarias.
 - O ambiente `prod` ainda utiliza state Terraform local.
 - Se um `apply` falhar parcialmente, corrija o erro, gere um novo plano e aplique novamente.
+- O notificador critico tenta o envio pelo SES no maximo tres vezes e repete automaticamente somente quando o SES identifica throttling explicito.
+- Respostas SES 5xx sem throttling e falhas de transporte, incluindo timeout e connection reset, ficam em `FAILED_AFTER_SEND_ATTEMPT` e exigem reconciliacao manual; apenas `FAILED_BEFORE_SEND` permite uma nova tentativa de entrega.
