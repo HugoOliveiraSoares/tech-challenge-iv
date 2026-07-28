@@ -91,7 +91,6 @@ terraform-dev-plan: package terraform-dev-init ## Plan Terraform dev against fak
 
 terraform-dev-apply: package terraform-dev-init ## Apply Terraform dev against fakecloud.
 	$(TERRAFORM_DEV) apply -auto-approve $(DEV_TERRAFORM_VARS)
-	$(LOCAL_AWS_ENV) ./scripts/fakecloud-default-stage.sh
 
 terraform-dev-destroy: terraform-dev-init ## Destroy Terraform dev resources from fakecloud.
 	$(TERRAFORM_DEV) destroy -auto-approve $(DEV_TERRAFORM_VARS)
