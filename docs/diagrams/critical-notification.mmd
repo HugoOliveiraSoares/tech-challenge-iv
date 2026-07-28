@@ -2,10 +2,15 @@ sequenceDiagram
     autonumber
     participant SNS as SNS Topic
     participant Lambda as critical-notifier
+    participant Control as DynamoDB controle
     participant SES as Amazon SES
     participant Admin as Administrador
 
-    SNS->>Lambda: Evento FeedbackCritico
+    SNS->>Lambda: Envelope SNS com CriticalFeedbackEvent
+    Lambda->>Lambda: Extrai e valida a mensagem SNS
+    Lambda->>Control: Adquire controle idempotente
+    Control-->>Lambda: Processamento permitido
     Lambda->>Lambda: Monta a mensagem de urgência
     Lambda->>SES: Solicita o envio do e-mail
+    Lambda->>Control: Marca envio concluído
     SES-->>Admin: Entrega a notificação

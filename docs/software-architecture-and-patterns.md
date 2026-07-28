@@ -2,7 +2,7 @@
 
 ## Visao Geral Real
 
-O sistema e uma plataforma serverless de feedback educacional em Java/Quarkus. A arquitetura de infraestrutura esta modelada em Terraform. No runtime Java, `feedback-api` e `critical-notifier` ainda usam adapters em memoria/no-op para DynamoDB, SNS e e-mail critico; `weekly-report` ja usa adapters AWS SDK para DynamoDB e SES.
+O sistema e uma plataforma serverless de feedback educacional em Java/Quarkus. A arquitetura de infraestrutura esta modelada em Terraform. No runtime Java atual, `feedback-api` usa adapters AWS SDK para DynamoDB e SNS; `critical-notifier` processa envelopes SNS, usa DynamoDB para idempotencia e SES para e-mail critico; `weekly-report` usa DynamoDB, idempotencia e SES.
 
 Fluxo alvo modelado:
 
@@ -22,8 +22,8 @@ flowchart LR
 
 Estado do codigo atual:
 
-- `feedback-api` atende HTTP, valida payload, gera/reutiliza `X-Correlation-Id`, cria `Feedback`, calcula `periodo`, salva em memoria e chama publisher critico no-op para urgencia `CRITICA`.
-- `critical-notifier` recebe input Lambda simples `{feedbackId, correlationId}` e delega para gateway de e-mail no-op.
+- `feedback-api` atende HTTP, valida payload, gera/reutiliza `X-Correlation-Id`, cria `Feedback`, calcula `periodo`, salva no DynamoDB e publica evento SNS para urgencia `CRITICA`.
+- `critical-notifier` recebe envelope SNS, extrai `CriticalFeedbackEvent`, aplica controle idempotente em DynamoDB e envia e-mail via SES.
 - `weekly-report` recebe input Lambda simples `{periodo}`, consulta DynamoDB por `periodo`, aplica idempotencia, calcula indicadores e envia e-mail via SES.
 - `shared-kernel` centraliza dominio e ports compartilhados usados por mais de um app.
 
@@ -33,16 +33,19 @@ Estado do codigo atual:
 apps/feedback-api
 +-- core/dto          # CriarAvaliacaoCommand
 +-- core/usecase      # CriarAvaliacaoUseCase
-+-- infra/config      # ClockProducer
-+-- infra/gateway/db  # InMemoryFeedbackGateway
-+-- infra/gateway/sns # NoOpCriticalFeedbackPublisher
++-- infra/config      # AwsClientProducer, ClockProducer, FeedbackConfig
++-- infra/gateway/db  # DynamoDbFeedbackRepository, InMemoryFeedbackGateway sem CDI ativo
++-- infra/gateway/sns # SnsCriticalFeedbackPublisher
 +-- infra/http        # AvaliacaoResource, HealthResource
 
 apps/critical-notifier
++-- core/domain       # CriticalNotificationEmail, ProcessingLease
 +-- core/gateway      # EmailGateway
 +-- core/usecase      # NotifyCriticalFeedbackUseCase
-+-- infra/gateway/ses # NoOpEmailGateway
-+-- infra/lambda      # CriticalNotifierHandler
++-- infra/config      # AwsClientProducer, ClockProducer
++-- infra/gateway/dynamodb # DynamoDbCriticalNotificationIdempotencyGateway
++-- infra/gateway/ses # SesCriticalEmailGateway
++-- infra/lambda      # CriticalNotifierHandler, SnsCriticalFeedbackEventParser
 
 apps/weekly-report
 +-- core/domain       # WeeklyFeedback, WeeklyReport, WeeklyReportRequest, WeeklyReportResult
@@ -94,13 +97,9 @@ Implementado hoje:
 4. Resource cria `CriarAvaliacaoCommand` e chama `CriarAvaliacaoUseCase`.
 5. Use case chama `Feedback.criar` com `UUID.randomUUID()` e `Instant.now(clock)`.
 6. `Feedback` normaliza descricao/correlation id, classifica urgencia e calcula `periodo` por semana ISO UTC.
-7. Use case chama `FeedbackRepository.save`; adapter atual guarda em memoria.
-8. Se urgencia for `CRITICA`, use case publica `CriticalFeedbackEvent.from(feedback)`; adapter atual so loga.
+7. Use case chama `FeedbackRepository.save`; adapter CDI ativo grava item na tabela DynamoDB configurada por `FEEDBACK_TABLE_NAME`.
+8. Se urgencia for `CRITICA`, use case publica `CriticalFeedbackEvent.from(feedback)` no topico SNS configurado por `CRITICAL_TOPIC_ARN`.
 9. Resource retorna `201` com `id`, `status=CREATED`, `urgencia`, `dataEnvio` e header `X-Correlation-Id`.
-
-Divergencias atuais em relacao ao contrato/arquitetura alvo:
-
-- Persistencia DynamoDB e publicacao SNS ainda nao substituem os adapters in-memory/no-op.
 
 ## Fluxo de Notificacao Critica
 
@@ -112,12 +111,13 @@ Infraestrutura modelada:
 
 Codigo atual:
 
-1. `CriticalNotifierHandler` recebe `Input(String feedbackId, String correlationId)`.
-2. Handler cria `CriticalFeedbackEvent`.
-3. `NotifyCriticalFeedbackUseCase` delega para `EmailGateway`.
-4. `NoOpEmailGateway` registra log e nao envia e-mail.
+1. `CriticalNotifierHandler`, exposto como `criticalNotifier`, recebe o payload Lambda e delega a leitura do envelope ao `SnsCriticalFeedbackEventParser`.
+2. O parser extrai mensagens SNS e cria `CriticalFeedbackEvent` com os campos do dominio compartilhado.
+3. `NotifyCriticalFeedbackUseCase` tenta adquirir controle idempotente em `feedback-processing-control-<environment>` antes de enviar.
+4. `SesCriticalEmailGateway` envia o e-mail administrativo via SES.
+5. O caso de uso marca sucesso quando o envio conclui; estados ambiguos ou em progresso bloqueiam retry automatico para evitar duplicidade.
 
-Ponto sensivel: o handler nao processa o envelope real de SNS. Alem disso, alarmes CloudWatch publicam no mesmo topico dos feedbacks criticos. Antes de integrar, separar o canal operacional e definir um adapter que extraia/valide o payload de feedback do envelope SNS.
+Ponto sensivel: alarmes CloudWatch ainda usam o mesmo topico SNS dos feedbacks criticos. Manter mensagens operacionais separadas ou filtradas evita que o notifier tente interpretar alertas como feedback critico.
 
 ## Fluxo de Relatorio Semanal
 
@@ -136,10 +136,10 @@ Codigo atual:
 5. `DynamoDbWeeklyReportIdempotencyGateway` registra o processamento em `feedback-processing-control-<environment>`; apenas `FAILED_BEFORE_SEND` permite retry. `PROCESSING`, `SENT` e `FAILED_AFTER_SEND_ATTEMPT` bloqueiam nova execucao.
 6. `SesReportEmailGateway` envia o relatorio por SES.
 
-Lacunas arquiteturais:
+Lacunas arquiteturais e de validacao:
 
-- Falta teste de integracao contra DynamoDB/SES local.
-- O `feedback-api` ainda nao grava em DynamoDB; portanto, em execucao integrada local, o `weekly-report` depende de dados semeados por script ou inseridos diretamente na tabela fakecloud.
+- O `make smoke` cobre apenas `POST /avaliacao` retornando `201`; nao comprova persistencia, SNS, notificacao nem relatorio.
+- O script E2E local ainda precisa de revisao porque suas mensagens finais dizem que o pipeline unificado esta adiado, apesar dos adapters existirem no runtime.
 - O contrato Scheduler -> handler nao esta validado: o Scheduler nao envia payload explicito, enquanto o handler aceita um record proprio opcional. Com entrada nula/vazia, o use case calcula a semana atual em UTC.
 
 ## Padroes Recorrentes
@@ -148,8 +148,8 @@ Lacunas arquiteturais:
 - Construtores compactos em records de dominio para validar invariantes.
 - Interfaces `Gateway`/`Repository`/`Publisher` como ports de saida.
 - Use cases pequenos, dependentes de ports; CDI e logging ainda aparecem no `core`.
-- Adapters temporarios nomeados como `InMemory...` ou `NoOp...` para tornar lacunas explicitas.
-- Adapters AWS reais em `weekly-report` mantem SDK e variaveis de ambiente fora do use case.
+- Adapters AWS reais em `infra/gateway/*` mantem SDK e variaveis de ambiente fora dos use cases.
+- Doubles em memoria aparecem em testes e o `InMemoryFeedbackGateway` permanece no codigo sem CDI ativo, mas nao representa o adapter runtime principal.
 - Recursos HTTP usam records internos para request/response enquanto nao ha DTO compartilhado estavel.
 - Handlers Lambda usam `@Named` e `quarkus.lambda.handler` (`criticalNotifier`, `weeklyReport`).
 - `weekly-report` usa MDC para enriquecer logs JSON com contexto operacional.
@@ -161,14 +161,14 @@ Lacunas arquiteturais:
 - Health check: `GET /health`.
 - Pacotes: `br.com.fiap.feedbackapi`, `br.com.fiap.criticalnotifier`, `br.com.fiap.weeklyreport`, `br.com.fiap.feedbackplatform.shared`.
 - Recursos Terraform: `feedback-api-<environment>`, `critical-notifier-<environment>`, `weekly-report-<environment>`, `feedbacks-<environment>`, `feedback-processing-control-<environment>`, `feedback-critical-topic-<environment>`.
-- Variaveis consumidas por `weekly-report`: `FEEDBACK_TABLE_NAME`, `PROCESSING_CONTROL_TABLE_NAME`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `AWS_ENDPOINT_URL` e `LOG_LEVEL`. As variaveis AWS injetadas nos outros dois apps ainda nao sao consumidas por seus adapters no-op/in-memory.
+- Variaveis consumidas pelo runtime: `feedback-api` usa `FEEDBACK_TABLE_NAME`, `CRITICAL_TOPIC_ARN`, `AWS_REGION`, `AWS_ENDPOINT_URL` e `LOG_LEVEL`; `critical-notifier` usa `PROCESSING_CONTROL_TABLE_NAME`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `AWS_ENDPOINT_URL` e `LOG_LEVEL`; `weekly-report` usa `FEEDBACK_TABLE_NAME`, `PROCESSING_CONTROL_TABLE_NAME`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `AWS_ENDPOINT_URL` e `LOG_LEVEL`.
 - `periodo` usa formato ISO week UTC `AAAA-Www`, por exemplo `2026-W01`; o cadastro de feedback e o relatorio semanal seguem a mesma convencao.
 
 ## Regras para Evoluir Sem Quebrar o Desenho
 
-- Para DynamoDB, implemente `FeedbackRepository` em `apps/feedback-api/infra/gateway/db`; nao coloque SDK no use case.
-- Para SNS, substitua `NoOpCriticalFeedbackPublisher` mantendo `CriticalFeedbackPublisher`.
-- Para SES, implemente gateways em `infra/gateway/ses` e preserve use cases como orquestradores.
+- Para novos acessos DynamoDB, mantenha SDK em `infra/gateway/*`; nao coloque SDK no use case.
+- Para SNS, preserve `CriticalFeedbackPublisher` e versionamento claro do payload.
+- Para SES, preserve gateways em `infra/gateway/ses` e use cases como orquestradores.
 - Para relatorio, evolua as portas ja existentes em `weekly-report`; nao reutilize classes internas do `feedback-api`.
 - Para erros HTTP, implemente mappers/adapters em `infra/http`, mantendo regras de negocio em `shared-kernel`/`core`.
 - Para contratos entre Lambdas, versionar payloads explicitamente antes de acoplar handlers a eventos reais.
@@ -176,14 +176,12 @@ Lacunas arquiteturais:
 
 ## Areas de Atencao
 
-- `feedback-api` e `critical-notifier` ainda usam adapters placeholder para DynamoDB/SNS/SES.
 - `shared-kernel` ja contem dominio e ports compartilhados; evitar transforma-lo em deposito de DTOs de transporte.
-- `critical-notifier` e incompativel com o envelope SNS real. No relatorio, falta validar o contrato entre o payload efetivo do EventBridge Scheduler e o input proprio do handler.
+- No relatorio, falta validar o contrato entre o payload efetivo do EventBridge Scheduler e o input proprio do handler.
 - `weekly-report` usa `Query` por `periodo` no GSI; a tabela de controle evita envios duplicados por periodo.
 - Falhas do relatorio semanal apos iniciar a tentativa de envio sao tratadas como ambiguas e bloqueiam retry automatico; reprocessamento exige reset manual do controle do periodo.
 - Um estado `PROCESSING` nao possui lease/TTL ou recuperacao automatica e pode bloquear um periodo indefinidamente apos crash.
+- A notificacao critica tambem privilegia prevencao de duplicidade: estados ambiguos, envio em progresso e falhas permanentes exigem reconciliacao manual.
 - `infra/environments/dev/` e somente para fakecloud/local. Nao copiar credenciais/endpoints locais para `prod`.
 - Alarmes/dashboard esperam metricas customizadas ainda nao publicadas.
 - Nao ha DLQ para fluxos assincronos.
-
-Detalhes acionaveis e perguntas de decisao estao centralizados em [`pendencias.md`](pendencias.md).

@@ -40,7 +40,7 @@ Decisao: separar `core` e `infra`, com use cases dependendo de ports/interfaces.
 
 Evidencia: estrutura dos tres apps, `FeedbackRepository`, `CriticalFeedbackPublisher`, gateways locais e testes de use case com doubles simples.
 
-Consequencia: facilita substituir adapters no-op por AWS SDK sem levar detalhes AWS ao caso de uso. O custo e manter interfaces/records mesmo em fluxos pequenos. CDI e logging ainda aparecem em `core`, portanto nao ha isolamento completo de frameworks.
+Consequencia: facilita manter adapters AWS SDK fora dos casos de uso. O custo e manter interfaces/records mesmo em fluxos pequenos. CDI e logging ainda aparecem em `core`, portanto nao ha isolamento completo de frameworks.
 
 ### Shared kernel para dominio transversal
 
@@ -50,21 +50,21 @@ Evidencia: `Feedback`, `CriticalFeedbackEvent`, `PeriodoIsoWeek`, `UrgenciaClass
 
 Tradeoff: evita duplicacao de regra de dominio e contrato interno, mas aumenta risco de acoplamento se DTOs de transporte forem movidos para la sem estabilidade.
 
-### Adapters temporarios in-memory/no-op onde integracoes ainda nao foram concluidas
+### Adapters AWS ativos atras de ports
 
-Decisao: manter implementacao executavel inicial sem AWS SDK real no `feedback-api` e no `critical-notifier`.
+Decisao: manter DynamoDB, SNS e SES em adapters de infraestrutura, atras de ports/use cases, sem levar SDK AWS para a regra de aplicacao.
 
-Evidencia: `InMemoryFeedbackGateway`, `NoOpCriticalFeedbackPublisher` e `NoOpEmailGateway`.
+Evidencia: `DynamoDbFeedbackRepository`, `SnsCriticalFeedbackPublisher`, `DynamoDbCriticalNotificationIdempotencyGateway`, `SesCriticalEmailGateway`, `DynamoDbWeeklyFeedbackReader`, `DynamoDbWeeklyReportIdempotencyGateway` e `SesReportEmailGateway`.
 
-Tradeoff: permite testar fluxo de aplicacao, CI e empacotamento cedo, mas pode mascarar lacunas de integracao. Persistencia da API, publicacao SNS e notificacao critica por SES ainda nao funcionam de ponta a ponta.
+Tradeoff: aproxima o runtime da arquitetura Terraform e permite testes unitarios/integracao dos adapters, mas aumenta dependencia de configuracao correta de endpoints, credenciais locais e permissoes IAM. O `InMemoryFeedbackGateway` permanece no codigo sem CDI ativo e deve ser tratado como legado/test double, nao como runtime principal.
 
 ### weekly-report com AWS SDK direto em adapters
 
-Decisao: implementar o relatorio semanal com adapters reais para DynamoDB e SES antes da API persistir no DynamoDB.
+Decisao: manter o relatorio semanal com adapters reais para DynamoDB e SES, consumindo a mesma tabela de feedbacks gravada pela API.
 
 Evidencia: `DynamoDbWeeklyFeedbackReader`, `DynamoDbWeeklyReportIdempotencyGateway`, `SesReportEmailGateway` e `AwsClientProducer` em `apps/weekly-report`.
 
-Tradeoff: antecipa a parte operacional do relatorio e valida o desenho de tabela/GSI, mas o fluxo completo ainda depende de dados semeados ou gravados por outro meio enquanto `feedback-api` continuar in-memory.
+Tradeoff: antecipa a parte operacional do relatorio e valida o desenho de tabela/GSI. Como a API ja grava no DynamoDB, o relatorio pode consumir feedbacks reais do mesmo armazenamento; scripts de seed continuam uteis para cenarios deterministas e demonstracoes locais.
 
 ### DynamoDB com GSI por periodo
 
@@ -80,7 +80,15 @@ Decisao: feedback critico deve sair da API via SNS e ser tratado por `critical-n
 
 Evidencia: Terraform assina a Lambda no topico SNS e `CriarAvaliacaoUseCase` chama `CriticalFeedbackPublisher` apenas para `CRITICA`.
 
-Tradeoff: reduz latencia e acoplamento da API, mas introduz entrega eventual, retries e risco de duplicidade se idempotencia nao for implementada.
+Tradeoff: reduz latencia e acoplamento da API, mas introduz entrega eventual, retries e necessidade de idempotencia no consumidor.
+
+### Idempotencia conservadora para notificacao critica
+
+Decisao: bloquear retries automaticos em estados ambiguos, envio em progresso ou falha permanente para priorizar prevencao de duplicidade.
+
+Evidencia: `NotifyCriticalFeedbackUseCase` e `DynamoDbCriticalNotificationIdempotencyGateway`.
+
+Tradeoff: reduz risco de e-mails duplicados em retries SNS/Lambda, mas pode exigir reconciliacao manual de registros `PROCESSING`, falhas ambiguas ou falhas permanentes.
 
 ### Terraform modular como fonte de infraestrutura
 
@@ -124,10 +132,10 @@ Tradeoff: UTC preserva a mesma convencao usada para persistir `Feedback.periodo`
 
 ## Limitacoes Atuais
 
-- A separacao em adapters permite executar os apps antes de concluir AWS, mas o fluxo de negocio ainda nao funciona de ponta a ponta.
-- A infraestrutura provisiona recursos e permissoes que os adapters in-memory/no-op ainda nao consomem.
-- Contratos assincronos, idempotencia do notifier e recuperacao operacional do relatorio ainda exigem decisoes explicitas.
-- A lista priorizada e verificavel das lacunas fica em [`pendencias.md`](pendencias.md), evitando duplicar aqui o inventario operacional.
+- O runtime implementa o caminho API -> DynamoDB -> SNS -> notifier, mas a validacao local automatizada ainda nao comprova todo o pipeline em um unico teste persistente.
+- `make smoke` cobre somente o contrato HTTP basico; `make test-it` cobre integracoes fakecloud selecionadas via Testcontainers.
+- Contrato efetivo do EventBridge Scheduler, separacao de topicos operacionais e recuperacao manual de estados idempotentes ainda exigem decisoes operacionais explicitas.
+- Alarmes, DLQ, metricas customizadas e politica de dados pessoais continuam como lacunas relevantes para producao real.
 
 ## Riscos Aceitos ou Implicitos
 
@@ -137,7 +145,7 @@ Tradeoff: UTC preserva a mesma convencao usada para persistir `Feedback.periodo`
 - SES sandbox pode bloquear envios para destinatarios nao verificados.
 - fakecloud pode nao reproduzir todos os comportamentos e limites da AWS real.
 - Tratar `infra/environments/dev/` como ambiente AWS real criaria risco de provisionar recursos com endpoints/credenciais locais incorretos; a separacao pretendida e `dev` local fakecloud e `prod` AWS real.
-- Sem idempotencia implementada no handler de notificacao critica, retries de SNS/Lambda podem causar notificacoes duplicadas quando o envio real for implementado, apesar da infraestrutura ja provisionar a tabela auxiliar e as permissoes necessarias.
+- A idempotencia da notificacao critica evita duplicidade, mas pode deixar registros exigindo reconciliacao manual quando ha falha ambigua, falha permanente ou processamento interrompido.
 - CI usa placeholders para validar Terraform; isso nao comprova que os zips reais existem fora do job de package.
 
 ## Alternativas Implicitamente Rejeitadas
@@ -148,4 +156,4 @@ Tradeoff: UTC preserva a mesma convencao usada para persistir `Feedback.periodo`
 - CORS `*` em producao: `prod` usa lista vazia por padrao.
 - Relatorio por varredura principal: o codigo e a policy IAM implementam apenas `Query` no GSI por `periodo`.
 
-As acoes pendentes, riscos ainda nao aceitos e perguntas que exigem decisao humana estao em [`pendencias.md`](pendencias.md).
+As acoes pendentes mais importantes devem ser mantidas perto dos documentos que as motivam ou em issues do repositorio, para evitar referencias locais quebradas.

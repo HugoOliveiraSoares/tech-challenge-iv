@@ -161,9 +161,9 @@ O smoke test usa o output `api_base_url` do Terraform quando ele existe. Se o ou
 
 ## Estado Atual Das Integracoes
 
-O ambiente local ja consegue subir fakecloud e provisionar a infraestrutura modelada. `critical-notifier` e `weekly-report` ja possuem testes de integracao reais contra fakecloud via Testcontainers, exercitando DynamoDB e SES diretamente. O `feedback-api` ainda persiste em memoria e o fluxo de notificacao critica ainda usa adapters no-op para SNS/SES; o IT da API (`AvaliacaoResourceIT`) valida o comportamento HTTP do aplicativo empacotado com repositorio em memoria e publicador no-op.
+O ambiente local ja consegue subir fakecloud e provisionar a infraestrutura modelada. `feedback-api` possui adapters ativos para DynamoDB e SNS; `critical-notifier` possui parser de envelope SNS, idempotencia DynamoDB e envio SES; `weekly-report` consulta DynamoDB, aplica idempotencia e envia SES.
 
-O pipeline unificado `POST /avaliacao -> DynamoDB -> SNS -> critical-notifier` permanece adiado. Quando os adapters reais forem adicionados, os mesmos comandos devem passar a exercitar DynamoDB, SNS, SES, EventBridge e Lambdas pelo fakecloud de ponta a ponta.
+`critical-notifier` e `weekly-report` possuem testes de integracao reais contra fakecloud via Testcontainers. O `feedback-api` possui testes do adapter DynamoDB e publisher SNS, alem dos testes HTTP Quarkus. O pipeline unificado `POST /avaliacao -> DynamoDB -> SNS -> critical-notifier` esta implementado no runtime, mas sua validacao local persistente deve ser tratada com cautela porque `make smoke` cobre apenas HTTP e o script E2E ainda contem mensagens antigas sobre esse fluxo.
 
 ## Testes De Integracao
 
@@ -183,7 +183,7 @@ Convencao recomendada para novos testes:
 *IT.java
 ```
 
-Os testes de integracao criam tabelas DynamoDB e identidades SES com nomes unicos, usam portas mapeadas aleatoriamente e limpiam recursos ao final. Nao dependem de estado persistido ou Terraform apply.
+Os testes de integracao criam tabelas DynamoDB e identidades SES com nomes unicos, usam portas mapeadas aleatoriamente e limpam recursos ao final. Nao dependem de estado persistido ou Terraform apply.
 
 ### Isolamento de Recursos
 
@@ -204,7 +204,7 @@ Prerequisitos: `make local-up` deve ter sido executado previamente. O script:
 3. Semeia dados semanais e invoca o Lambda `weekly-report`.
 4. Inspeciona estado DynamoDB e emails SES.
 
-**Fluxo adiado**: o pipeline `POST /avaliacao -> DynamoDB -> SNS -> critical-notifier` ainda nao esta conectado. Apenas os caminhos individualmente conectados sao validados.
+**Caveat de validacao**: o runtime ja possui os adapters que conectam API, DynamoDB, SNS, notifier, DynamoDB de controle e SES. Ainda assim, revise a saida do `scripts/e2e-local.sh` ao usa-lo como evidencia, pois o script conserva mensagens antigas sobre pipeline adiado e inclui invocacoes controladas alem do fluxo HTTP principal.
 
 ### Solucao de Problemas
 

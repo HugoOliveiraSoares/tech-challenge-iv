@@ -6,7 +6,7 @@ info:
     API REST para registro de feedbacks de estudantes.
     A API recebe a descrição e a nota da avaliação, classifica automaticamente a urgência
     e aciona os ports de persistência e notificação quando necessário. No runtime atual,
-    esses ports usam adapters em memória/no-op; as integrações DynamoDB/SNS ainda estão pendentes.
+    os adapters configurados persistem feedbacks em DynamoDB e publicam eventos críticos no SNS.
 servers:
   - url: https://{apiId}.execute-api.{region}.amazonaws.com
     description: API Gateway AWS com stage $default

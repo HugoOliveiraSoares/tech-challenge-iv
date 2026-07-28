@@ -2,13 +2,13 @@
 
 ## Estado Atual Verificado
 
-O repositorio contem uma aplicacao Java/Quarkus multi-modulo, infraestrutura Terraform e contrato OpenAPI para uma plataforma serverless de feedback educacional. O codigo executavel cobre os tres componentes principais. O `feedback-api` e o `critical-notifier` ainda usam adapters in-memory/no-op para persistencia, SNS e e-mail critico; o `weekly-report` ja usa AWS SDK para DynamoDB e SES.
+O repositorio contem uma aplicacao Java/Quarkus multi-modulo, infraestrutura Terraform e contrato OpenAPI para uma plataforma serverless de feedback educacional. O codigo executavel cobre os tres componentes principais. O `feedback-api` usa DynamoDB e SNS, o `critical-notifier` usa SNS, DynamoDB e SES, e o `weekly-report` usa DynamoDB e SES.
 
 Modulos principais:
 
 - `libs/shared-kernel`: dominio e ports compartilhados (`Feedback`, `CriticalFeedbackEvent`, `PeriodoIsoWeek`, `Urgencia`, `UrgenciaClassifier`, `FeedbackRepository`, `CriticalFeedbackPublisher`).
 - `apps/feedback-api`: API REST Quarkus para `POST /avaliacao` e `GET /health`.
-- `apps/critical-notifier`: Lambda Quarkus para notificacao de feedback critico; envio de e-mail ainda e no-op.
+- `apps/critical-notifier`: Lambda Quarkus para notificacao de feedback critico com envelope SNS, idempotencia DynamoDB e envio SES.
 - `apps/weekly-report`: Lambda Quarkus para relatorio semanal com consulta DynamoDB, idempotencia e envio SES.
 - `infra/environments/dev`: composicao Terraform apenas para execucao local com fakecloud em `localhost:4566`; nao deve ser usada para recursos AWS reais.
 - `infra/environments/prod`: composicao Terraform para AWS real, sem endpoints locais.
@@ -26,8 +26,8 @@ Modulos principais:
 
 Dependencias por modulo:
 
-- `feedback-api`: `quarkus-amazon-lambda-http`, `quarkus-rest`, `quarkus-rest-jackson`, `quarkus-hibernate-validator`, `shared-kernel`, RestAssured em testes.
-- `critical-notifier`: `quarkus-amazon-lambda`, `quarkus-jackson`, `shared-kernel`.
+- `feedback-api`: `quarkus-amazon-lambda-http`, `quarkus-rest`, `quarkus-rest-jackson`, `quarkus-hibernate-validator`, Quarkiverse DynamoDB Enhanced, Quarkiverse SNS, AWS SDK URL connection client, `shared-kernel`, RestAssured/Mockito em testes.
+- `critical-notifier`: `quarkus-amazon-lambda`, `quarkus-jackson`, `quarkus-logging-json`, AWS SDK DynamoDB/SES, `aws-lambda-java-events`, `shared-kernel`, Testcontainers em testes de integracao.
 - `weekly-report`: `quarkus-amazon-lambda`, `quarkus-jackson`, `quarkus-logging-json`, AWS SDK DynamoDB/SES, `shared-kernel`.
 - `shared-kernel`: JUnit 5 e `jboss-logmanager` para testes.
 
@@ -45,7 +45,7 @@ Subir o emulador AWS local:
 docker compose up -d
 ```
 
-O estado do fakecloud fica em `.fakecloud/`, ignorado pelo Git. A API local atual nao usa DynamoDB/SNS reais; ela persiste em memoria e loga publicacao critica. O `weekly-report` usa `AWS_ENDPOINT_URL` para apontar os clients DynamoDB/SES para fakecloud durante execucao local.
+O estado do fakecloud fica em `.fakecloud/`, ignorado pelo Git. Em modo local, `feedback-api`, `critical-notifier` e `weekly-report` usam `AWS_ENDPOINT_URL` para apontar clients AWS para fakecloud quando executados com as variaveis adequadas.
 
 Para o fluxo local completo com Terraform, prefira os Make targets:
 
@@ -115,7 +115,7 @@ Para `terraform validate` sem build Java, o CI cria placeholders em `apps/*/targ
 - `apps/critical-notifier/target/function.zip`
 - `apps/weekly-report/target/function.zip`
 
-Nao ha configuracao versionada de lint/formatter Java, medicao de cobertura, migrations ou deploy automatizado. Existe seed local para o relatorio em `scripts/seed-feedbacks-dev.sh`/`make seed-feedbacks-dev`. O workflow `.github/workflows/ci.yml` roda testes Java, package Maven, validacao OpenAPI, `terraform fmt -check` e `terraform validate` para `dev` e `prod`; ele nao executa `terraform plan/apply`, nao reutiliza no job Terraform os zips gerados pelo job Maven e nao roda testes de integracao com fakecloud/AWS.
+Nao ha configuracao versionada de lint/formatter Java, medicao de cobertura, migrations ou deploy automatizado. Existe seed local para o relatorio em `scripts/seed-feedbacks-dev.sh`/`make seed-feedbacks-dev`. O workflow `.github/workflows/ci.yml` roda testes Java de unidade, package Maven, validacao OpenAPI, `terraform fmt -check` e `terraform validate` para `dev` e `prod`; ele nao executa `terraform plan/apply`, nao reutiliza no job Terraform os zips gerados pelo job Maven e nao roda o perfil Failsafe de integracao com fakecloud.
 
 ## Estrutura Tecnica
 
@@ -136,7 +136,7 @@ Padrao de camadas observado:
 - `core/usecase`: orquestracao de regra de aplicacao; os casos de uso usam CDI e, no relatorio, JBoss Logging/MDC, portanto o `core` nao e totalmente neutro a frameworks.
 - `infra/http`: recursos REST e DTOs de transporte da API.
 - `infra/lambda`: handlers Lambda diretos.
-- `infra/gateway/*`: adapters de infraestrutura; podem ser temporarios (`InMemory`/`NoOp`) ou adapters AWS reais, como os de DynamoDB/SES no `weekly-report`.
+- `infra/gateway/*`: adapters de infraestrutura, incluindo DynamoDB, SNS e SES. Doubles em memoria aparecem em testes e o `InMemoryFeedbackGateway` permanece no codigo sem CDI ativo.
 - `infra/config`: produtores/configuracao CDI.
 - `shared-kernel`: conceitos de dominio/ports compartilhados por mais de um app.
 
@@ -144,7 +144,7 @@ Padrao de camadas observado:
 
 Contrato versionado: `docs/openapi-feedback-api.yaml`.
 
-- `POST /avaliacao`: valida `descricao` e `nota`, aceita `X-Correlation-Id`, classifica urgencia, gera `id`, `dataEnvio`, `periodo`, salva em memoria e retorna `201`.
+- `POST /avaliacao`: valida `descricao` e `nota`, aceita `X-Correlation-Id`, classifica urgencia, gera `id`, `dataEnvio`, `periodo`, salva no DynamoDB, publica evento SNS quando a urgencia e `CRITICA` e retorna `201`.
 - `GET /health`: retorna `{ "status": "UP" }`.
 
 Request valido:
@@ -181,12 +181,12 @@ Persistencia modelada no Terraform:
 - Tabela DynamoDB `feedbacks-<environment>` com billing `PAY_PER_REQUEST`.
 - Chave primaria `id` string.
 - GSI `dataEnvio-index` com partition key `periodo` e sort key `dataEnvio`.
-- Tabela DynamoDB `feedback-processing-control-<environment>` com partition key `periodo`. O Terraform concede acesso ao notifier e ao relatorio, mas somente `weekly-report` a usa atualmente; o esquema existente e orientado a idempotencia por periodo.
+- Tabela DynamoDB `feedback-processing-control-<environment>` com partition key `periodo`. O Terraform concede acesso ao notifier e ao relatorio; ambos a usam para controles idempotentes com formatos de chave adequados ao respectivo fluxo.
 - Point-in-time recovery e server-side encryption habilitados.
 
 Persistencia implementada no codigo:
 
-- `feedback-api` usa `InMemoryFeedbackGateway` com `ConcurrentLinkedQueue`.
+- `feedback-api` usa `DynamoDbFeedbackRepository` como adapter CDI ativo para gravar feedbacks em DynamoDB; `InMemoryFeedbackGateway` permanece sem `@ApplicationScoped` e nao e o adapter runtime principal.
 - `Feedback` contem `id`, `descricao`, `nota`, `urgencia`, `dataEnvio`, `periodo` e `correlationId`.
 - `periodo` e calculado como semana ISO UTC (`AAAA-Www`) por `PeriodoIsoWeek`.
 
@@ -199,17 +199,17 @@ Integracoes modeladas no Terraform:
 
 Integracoes implementadas no codigo:
 
-- SNS ainda e `NoOpCriticalFeedbackPublisher` com log.
-- SES de notificacao critica ainda e `NoOpEmailGateway` com log.
+- SNS de feedback critico e `SnsCriticalFeedbackPublisher`, que publica `CriticalFeedbackEvent` serializado no topico configurado.
+- `critical-notifier` parseia envelopes SNS com `SnsCriticalFeedbackEventParser`, usa `DynamoDbCriticalNotificationIdempotencyGateway` e envia e-mail por `SesCriticalEmailGateway`.
 - SES de relatorio semanal envia e-mail via `SesReportEmailGateway`.
 - `weekly-report` consulta DynamoDB pelo GSI `dataEnvio-index`, calcula indicadores semanais e usa tabela de controle. Somente `FAILED_BEFORE_SEND` permite retry automatico; `PROCESSING`, `SENT` e `FAILED_AFTER_SEND_ATTEMPT` bloqueiam nova execucao.
-- Em `infra/environments/dev`, somente a Lambda `weekly-report` recebe `AWS_ENDPOINT_URL`/credenciais fakecloud via Terraform porque e o unico app que hoje instancia clients AWS SDK diretamente. `feedback-api` e `critical-notifier` recebem variaveis de recurso, mas seus adapters atuais nao usam SDK real.
+- Em `infra/environments/dev`, as Lambdas recebem endpoints/credenciais fakecloud quando precisam chamar AWS local. O `feedback-api` usa `host.docker.internal:4566` dentro da Lambda; `critical-notifier` usa o endpoint fakecloud configurado no ambiente; `weekly-report` tambem usa endpoint local para DynamoDB/SES.
 
 Variaveis efetivamente consumidas pelo codigo Java:
 
+- `feedback-api`: `FEEDBACK_TABLE_NAME`, `CRITICAL_TOPIC_ARN`, `AWS_REGION`, `AWS_ENDPOINT_URL`, credenciais AWS locais em perfil `%local` e `LOG_LEVEL`.
+- `critical-notifier`: `PROCESSING_CONTROL_TABLE_NAME`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `AWS_ENDPOINT_URL` e `LOG_LEVEL`.
 - `weekly-report`: `FEEDBACK_TABLE_NAME`, `PROCESSING_CONTROL_TABLE_NAME`, `ADMIN_EMAIL_TO`, `EMAIL_FROM`, `AWS_REGION`, `AWS_ENDPOINT_URL` e `LOG_LEVEL`.
-- `feedback-api`: nenhuma variavel AWS e consumida pelos adapters atuais; `FEEDBACK_TABLE_NAME` e `CRITICAL_TOPIC_ARN` sao apenas injetadas pela infraestrutura/Makefile.
-- `critical-notifier`: `ADMIN_EMAIL_TO`, `EMAIL_FROM` e `PROCESSING_CONTROL_TABLE_NAME` sao injetadas pelo Terraform, mas nao consumidas pelo adapter no-op.
 
 ## Observabilidade e Operacao
 
@@ -219,27 +219,27 @@ Infraestrutura modelada:
 - Alarmes CloudWatch para `Errors` e `Throttles` de cada Lambda.
 - Alarmes para metricas customizadas `NotificationFailureCount` e `WeeklyReportFailureCount` no namespace `FeedbackPlatform`.
 - Dashboard `feedback-platform-<environment>` com metricas Lambda e metricas de negocio esperadas.
-- Os alarmes usam atualmente o mesmo topico SNS dos eventos de feedback critico. Como o notifier nao interpreta envelopes SNS nem mensagens CloudWatch, esse acoplamento e uma pendencia operacional critica.
+- Os alarmes usam atualmente o mesmo topico SNS dos eventos de feedback critico. Como o notifier interpreta mensagens SNS como eventos de feedback, esse acoplamento com mensagens CloudWatch e uma pendencia operacional critica.
 
 Codigo atual:
 
-- Adapters no-op e use cases usam `org.jboss.logging.Logger`.
-- `weekly-report` configura logs JSON no console e campos MDC como `operation`, `periodo`, `status` e `feedback_count`.
-- `feedback-api` e `critical-notifier` nao configuram logs JSON no momento.
+- Use cases e adapters usam `org.jboss.logging.Logger`.
+- `critical-notifier` e `weekly-report` configuram logs JSON no console; o relatorio usa campos MDC como `operation`, `periodo`, `status` e `feedback_count`.
+- `feedback-api` nao configura logs JSON no momento.
 - Nao ha publicacao de metricas customizadas `FeedbackPlatform`.
 
 ## Testes Visiveis
 
 - `shared-kernel`: classificacao e limites de urgencia, invariantes/normalizacao de `Feedback`, semana ISO UTC e evento critico.
-- `feedback-api`: sucesso `201`, health, geracao/reuso de correlation ID, validacoes `400`/`422`, JSON invalido, `404`/`415` preservados e erro interno `500`.
-- `critical-notifier`: apenas delegacao do use case para o gateway de e-mail.
-- `weekly-report`: agregacoes, periodo padrao UTC, envio sem feedbacks, bloqueio de duplicidade, retry antes do envio e bloqueio depois de tentativa ambigua.
+- `feedback-api`: sucesso `201`, health, geracao/reuso de correlation ID, validacoes `400`/`422`, JSON invalido, `404`/`415` preservados, erros de persistencia/notificacao, erro interno `500`, adapter DynamoDB e publisher SNS.
+- `critical-notifier`: parser de envelope SNS, handler Lambda, use case, composicao de e-mail, gateway SES, producer AWS e gateway DynamoDB de idempotencia.
+- `weekly-report`: agregacoes, periodo padrao UTC, envio sem feedbacks, bloqueio de duplicidade, retry antes do envio, bloqueio depois de tentativa ambigua, handler Lambda, reader DynamoDB, idempotencia DynamoDB e gateway SES.
 
-Nao existem classes `*IT.java`, medicao de cobertura, testes dos handlers Lambda, dos adapters AWS ou dos contratos reais SNS/Scheduler. `make test-it` esta preparado para Failsafe, mas hoje nao executa testes de integracao do projeto.
+Classes `*IT.java` existentes: `CriticalNotifierIT`, `DynamoDbCriticalNotificationIdempotencyGatewayIT` e `WeeklyReportIT`. Elas rodam pelo perfil Maven `integration-test`/Failsafe e usam Testcontainers com fakecloud. Ainda nao ha medicao de cobertura, nem validacao CI desse perfil, nem teste integrado do contrato real EventBridge Scheduler. O `make smoke` cobre somente o retorno `201` do endpoint HTTP.
 
 ## Referencias e Pendencias
 
 - Ambiente local: [`development-environment.md`](development-environment.md).
 - Deploy manual em AWS: [`aws-deployment.md`](aws-deployment.md).
 - Contrato HTTP: [`openapi-feedback-api.yaml`](openapi-feedback-api.yaml).
-- Pendencias, riscos e perguntas abertas: [`pendencias.md`](pendencias.md).
+- Riscos e tradeoffs: [`decisions-and-tradeoffs.md`](decisions-and-tradeoffs.md).

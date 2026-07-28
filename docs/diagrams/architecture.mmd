@@ -9,6 +9,7 @@ flowchart LR
     Decision -- Não --> Finish[Retorna 201]
 
     SNSTopic --> NotifierLambda[Lambda critical-notifier]
+    NotifierLambda --> ControlDB[(DynamoDB processing control)]
     NotifierLambda --> SES[Amazon SES]
     SES --> AdminEmail[E-mail do administrador]
 
@@ -25,6 +26,6 @@ flowchart LR
     classDef critical fill:#1F2637,stroke:#FF667A,color:#F5F8FA,stroke-width:2px;
     classDef operation fill:#153044,stroke:#52D39A,color:#F5F8FA,stroke-width:2px;
     class Client,APIGW,FeedbackLambda entry;
-    class DynamoDB,Decision,SNSTopic,Scheduler,ReportLambda event;
+    class DynamoDB,ControlDB,Decision,SNSTopic,Scheduler,ReportLambda event;
     class NotifierLambda,SES,AdminEmail critical;
     class CloudWatch operation;
