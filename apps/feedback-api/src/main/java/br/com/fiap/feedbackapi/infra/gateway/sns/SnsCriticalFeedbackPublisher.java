@@ -42,7 +42,7 @@ public class SnsCriticalFeedbackPublisher implements CriticalFeedbackPublisher {
 
             var messageId = snsClient.publish(request).messageId();
 
-            LOGGER.infof("Evento de Feedback critico publicado. feedbackId=%s correlationId=%s messageId=%s",
+            LOGGER.infof("Evento de feedback critico publicado. feedbackId=%s correlationId=%s messageId=%s",
                     event.feedbackId(), event.correlationId(), messageId);
 
         }catch (JsonProcessingException exception){
@@ -54,7 +54,7 @@ public class SnsCriticalFeedbackPublisher implements CriticalFeedbackPublisher {
 
         } catch (RuntimeException exception){
             LOGGER.errorf(exception,
-                    "Falha ao publicar evento de Feedback critico. feedbackId=%s correlationId=%s", event.feedbackId(), event.correlationId());
+                    "Falha ao publicar evento de feedback critico. feedbackId=%s correlationId=%s", event.feedbackId(), event.correlationId());
 
             throw new NotificationException("Falha ao publicar evento de feedback critico",
                     exception);
