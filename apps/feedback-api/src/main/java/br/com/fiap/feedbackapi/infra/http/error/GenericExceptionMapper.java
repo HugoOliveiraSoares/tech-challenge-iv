@@ -35,8 +35,8 @@ public class GenericExceptionMapper implements ExceptionMapper<Exception> {
             return JsonErrorResponseFactory.invalidFormat(invalidFormat, correlationId);
         }
 
-        if(jacksonException instanceof JsonMappingException){
-            return JsonErrorResponseFactory.invalidMapping(correlationId);
+        if(jacksonException instanceof JsonMappingException jsonMappingException){
+            return JsonErrorResponseFactory.invalidMapping(jsonMappingException, correlationId);
         }
 
         if (exception instanceof WebApplicationException webApplicationException) {

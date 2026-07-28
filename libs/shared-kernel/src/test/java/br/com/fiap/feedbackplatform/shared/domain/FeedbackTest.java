@@ -42,20 +42,39 @@ class FeedbackTest {
     }
 
     @Test
-    void rejeitaDescricaoCurta() {
-        assertThrows(DomainValidationException.class, () -> Feedback.criar(ID, "curta", 8, DATA_ENVIO, null));
+    void rejeitaDescricaoComNoveCaracteresAposNormalizacao() {
+        assertThrows(DomainValidationException.class, () -> Feedback.criar(ID, "  123456789  ", 8, DATA_ENVIO, null));
     }
 
     @Test
-    void rejeitaDescricaoLonga() {
-        String descricaoLonga = "a".repeat(1001);
+    void aceitaDescricaoComDezCaracteresAposNormalizacao() {
+        Feedback feedback = Feedback.criar(ID, "  1234567890  ", 8, DATA_ENVIO, null);
 
-        assertThrows(DomainValidationException.class, () -> Feedback.criar(ID, descricaoLonga, 8, DATA_ENVIO, null));
+        assertEquals("1234567890", feedback.descricao());
+    }
+
+    @Test
+    void aceitaDescricaoComMilCaracteresAposNormalizacao() {
+        Feedback feedback = Feedback.criar(ID, "  " + "a".repeat(1000) + "  ", 8, DATA_ENVIO, null);
+
+        assertEquals(1000, feedback.descricao().length());
+    }
+
+    @Test
+    void rejeitaDescricaoComMilEUmCaracteresAposNormalizacao() {
+        String descricao = "  " + "a".repeat(1001) + "  ";
+
+        assertThrows(DomainValidationException.class, () -> Feedback.criar(ID, descricao, 8, DATA_ENVIO, null));
     }
 
     @Test
     void rejeitaIdAusente() {
         assertThrows(DomainValidationException.class, () -> Feedback.criar(null, DESCRICAO_VALIDA, 8, DATA_ENVIO, null));
+    }
+
+    @Test
+    void rejeitaDataEnvioAusente() {
+        assertThrows(DomainValidationException.class, () -> Feedback.criar(ID, DESCRICAO_VALIDA, 8, null, null));
     }
 
     @Test

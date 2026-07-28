@@ -100,7 +100,10 @@ class DynamoDbCriticalNotificationIdempotencyGatewayTest {
 
         ArgumentCaptor<UpdateItemRequest> requestCaptor = ArgumentCaptor.forClass(UpdateItemRequest.class);
         verify(dynamoDbClient).updateItem(requestCaptor.capture());
-        assertTrue(requestCaptor.getValue().conditionExpression().contains("ownerToken = :ownerToken"));
+        UpdateItemRequest request = requestCaptor.getValue();
+        assertTrue(request.conditionExpression().contains("ownerToken = :ownerToken"));
+        assertEquals("SENT", request.expressionAttributeValues().get(":status").s());
+        assertEquals(NOW.toString(), request.expressionAttributeValues().get(":sentAt").s());
     }
 
     @Test
@@ -131,5 +134,77 @@ class DynamoDbCriticalNotificationIdempotencyGatewayTest {
         assertEquals(
                 "ownerToken = :ownerToken AND #status = :sendAttempted",
                 requestCaptor.getValue().conditionExpression());
+        assertEquals(
+                "FAILED_AFTER_SEND_ATTEMPT",
+                requestCaptor.getValue().expressionAttributeValues().get(":status").s());
+        assertEquals("timeout", requestCaptor.getValue().expressionAttributeValues().get(":failureReason").s());
+    }
+
+    @Test
+    void markFailedBeforeSendPermiteProcessingOuSendAttemptedENormalizaMotivo() {
+        when(dynamoDbClient.updateItem(any(UpdateItemRequest.class))).thenReturn(null);
+
+        gateway.markFailedBeforeSend(FEEDBACK_ID, new ProcessingLease("owner-1"), "  ");
+
+        ArgumentCaptor<UpdateItemRequest> requestCaptor = ArgumentCaptor.forClass(UpdateItemRequest.class);
+        verify(dynamoDbClient).updateItem(requestCaptor.capture());
+        UpdateItemRequest request = requestCaptor.getValue();
+        assertEquals(
+                "ownerToken = :ownerToken AND (#status = :processing OR #status = :sendAttempted)",
+                request.conditionExpression());
+        assertEquals("FAILED_BEFORE_SEND", request.expressionAttributeValues().get(":status").s());
+        assertEquals("Unknown failure", request.expressionAttributeValues().get(":failureReason").s());
+        assertEquals(NOW.toString(), request.expressionAttributeValues().get(":failedAt").s());
+    }
+
+    @Test
+    void markFailedBeforeSendNormalizaReasonNulo() {
+        when(dynamoDbClient.updateItem(any(UpdateItemRequest.class))).thenReturn(null);
+
+        gateway.markFailedBeforeSend(FEEDBACK_ID, new ProcessingLease("owner-1"), null);
+
+        ArgumentCaptor<UpdateItemRequest> requestCaptor = ArgumentCaptor.forClass(UpdateItemRequest.class);
+        verify(dynamoDbClient).updateItem(requestCaptor.capture());
+        assertEquals("Unknown failure", requestCaptor.getValue().expressionAttributeValues().get(":failureReason").s());
+    }
+
+    @Test
+    void markFailedAfterSendAttemptRejeitaTokenAntigo() {
+        when(dynamoDbClient.updateItem(any(UpdateItemRequest.class)))
+                .thenThrow(ConditionalCheckFailedException.builder().build());
+
+        assertThrows(
+                ConditionalCheckFailedException.class,
+                () -> gateway.markFailedAfterSendAttempt(FEEDBACK_ID, new ProcessingLease("stale"), "error"));
+    }
+
+    @Test
+    void markFailedBeforeSendRejeitaTokenAntigo() {
+        when(dynamoDbClient.updateItem(any(UpdateItemRequest.class)))
+                .thenThrow(ConditionalCheckFailedException.builder().build());
+
+        assertThrows(
+                ConditionalCheckFailedException.class,
+                () -> gateway.markFailedBeforeSend(FEEDBACK_ID, new ProcessingLease("stale"), "error"));
+    }
+
+    @Test
+    void markAboutToSendRejeitaTokenAntigo() {
+        when(dynamoDbClient.updateItem(any(UpdateItemRequest.class)))
+                .thenThrow(ConditionalCheckFailedException.builder().build());
+
+        assertThrows(
+                ConditionalCheckFailedException.class,
+                () -> gateway.markAboutToSend(FEEDBACK_ID, new ProcessingLease("stale")));
+    }
+
+    @Test
+    void markSentRejeitaTokenAntigo() {
+        when(dynamoDbClient.updateItem(any(UpdateItemRequest.class)))
+                .thenThrow(ConditionalCheckFailedException.builder().build());
+
+        assertThrows(
+                ConditionalCheckFailedException.class,
+                () -> gateway.markSent(FEEDBACK_ID, new ProcessingLease("stale")));
     }
 }

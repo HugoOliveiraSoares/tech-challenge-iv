@@ -19,6 +19,21 @@ class PeriodoIsoWeekTest {
     }
 
     @Test
+    void calculaSemanaIso53() {
+        assertEquals("2020-W53", PeriodoIsoWeek.from(Instant.parse("2020-12-31T12:00:00Z")));
+    }
+
+    @Test
+    void mantemAnoIsoAnteriorNoInicioDoAnoUtc() {
+        assertEquals("2020-W53", PeriodoIsoWeek.from(Instant.parse("2021-01-01T00:00:00Z")));
+    }
+
+    @Test
+    void iniciaNovoAnoIsoNaSegundaFeiraUtc() {
+        assertEquals("2021-W01", PeriodoIsoWeek.from(Instant.parse("2021-01-04T00:00:00Z")));
+    }
+
+    @Test
     void permaneceNaSemanaAnteriorAntesDaMeiaNoiteUtc() {
         assertEquals("2026-W30", PeriodoIsoWeek.from(Instant.parse("2026-07-26T23:59:59Z")));
     }

@@ -72,3 +72,24 @@ class CriticalNotificationEmailComposerTest {
         assertTrue(!email.body().contains("correlationId:"));
     }
 }
+
+    @Test
+    void montaEmailComUrgenciaMedia() {
+        CriticalFeedbackEvent event = new CriticalFeedbackEvent(
+                "FeedbackCritico",
+                "1.0",
+                FEEDBACK_ID,
+                "Feedback medio para teste.",
+                5,
+                Urgencia.MEDIA,
+                DATA_ENVIO,
+                "2026-W22",
+                "corr-media");
+
+        CriticalNotificationEmail email = composer.compose(event);
+
+        assertTrue(email.body().contains("Urgencia: MEDIA"));
+        assertTrue(email.body().contains("nota: 5"));
+        assertTrue(email.subject().contains("feedbackId=" + FEEDBACK_ID));
+    }
+}

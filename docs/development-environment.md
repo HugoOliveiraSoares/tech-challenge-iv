@@ -161,17 +161,21 @@ O smoke test usa o output `api_base_url` do Terraform quando ele existe. Se o ou
 
 ## Estado Atual Das Integracoes
 
-O ambiente local ja consegue subir fakecloud e provisionar a infraestrutura modelada. O `feedback-api` ainda persiste em memoria e o fluxo de notificacao critica ainda usa adapters no-op para SNS/SES; o `weekly-report` ja usa DynamoDB e SES via AWS SDK apontando para fakecloud quando `AWS_ENDPOINT_URL` esta configurado. Por isso, o modo integracao valida empacotamento, Terraform e disponibilidade da API, mas ainda nao comprova o fluxo completo de feedback criado pela API, persistido em DynamoDB, publicado em SNS e enviado por e-mail critico.
+O ambiente local ja consegue subir fakecloud e provisionar a infraestrutura modelada. `critical-notifier` e `weekly-report` ja possuem testes de integracao reais contra fakecloud via Testcontainers, exercitando DynamoDB e SES diretamente. O `feedback-api` ainda persiste em memoria e o fluxo de notificacao critica ainda usa adapters no-op para SNS/SES; o IT da API (`AvaliacaoResourceIT`) valida o comportamento HTTP do aplicativo empacotado com repositorio em memoria e publicador no-op.
 
-Quando os adapters reais faltantes forem adicionados, os mesmos comandos devem passar a exercitar DynamoDB, SNS, SES, EventBridge e Lambdas pelo fakecloud de ponta a ponta.
+O pipeline unificado `POST /avaliacao -> DynamoDB -> SNS -> critical-notifier` permanece adiado. Quando os adapters reais forem adicionados, os mesmos comandos devem passar a exercitar DynamoDB, SNS, SES, EventBridge e Lambdas pelo fakecloud de ponta a ponta.
 
 ## Testes De Integracao
 
-O perfil Maven `integration-test` executa o Maven Failsafe no ciclo `verify`:
+O perfil Maven `integration-test` executa o Maven Failsafe no ciclo `verify`. Testcontainers inicia automaticamente um container fakecloud versao-pinhada e o para ao final; nenhuma instancia fakecloud externa e necessaria:
 
 ```bash
+make test-it
+# ou diretamente:
 ./mvnw -B verify -Pintegration-test
 ```
+
+Requisito: Docker deve estar acessivel. O comando nao depende de `fakecloud-up`, `AWS_ENDPOINT_URL` exportado ou Terraform apply.
 
 Convencao recomendada para novos testes:
 
@@ -179,7 +183,35 @@ Convencao recomendada para novos testes:
 *IT.java
 ```
 
-Os testes de integracao devem usar as variaveis locais impressas por `make env` e assumir fakecloud em `http://localhost:4566`.
+Os testes de integracao criam tabelas DynamoDB e identidades SES com nomes unicos, usam portas mapeadas aleatoriamente e limpiam recursos ao final. Nao dependem de estado persistido ou Terraform apply.
+
+### Isolamento de Recursos
+
+Cada modulo AWS habilitado (`critical-notifier`, `weekly-report`) compartilha um unico container fakecloud para sua execucao Failsafe. As classes de teste criam tabelas e identidades SES com nomes unicos por execucao e nao dependem de estado fakecloud persistido entre execucoes.
+
+## Testes E2E
+
+A validacao E2E usa o fakecloud persistente e a stack Terraform local:
+
+```bash
+make e2e
+```
+
+Prerequisitos: `make local-up` deve ter sido executado previamente. O script:
+
+1. Chama `POST /avaliacao` via API Gateway e valida a resposta HTTP.
+2. Invoca o Lambda `critical-notifier` com um evento controlado.
+3. Semeia dados semanais e invoca o Lambda `weekly-report`.
+4. Inspeciona estado DynamoDB e emails SES.
+
+**Fluxo adiado**: o pipeline `POST /avaliacao -> DynamoDB -> SNS -> critical-notifier` ainda nao esta conectado. Apenas os caminhos individualmente conectados sao validados.
+
+### Solucao de Problemas
+
+- **Docker nao disponivel**: `make test-it` e `make e2e` falham com mensagem clara. Verifique se o Docker esta rodando.
+- **Pull da imagem fakecloud falha**: verifique conectividade de rede e se `ghcr.io` esta acessivel. A imagem e fixada em `0.44.6` no POM raiz.
+- **Portas em conflito**: Testcontainers usa portas mapeadas aleatoriamente; conflitos sao improvaveis. Se ocorrerem, reinicie o Docker.
+- **Estado persistido do fakecloud**: o diretorio `.fakecloud/` mantem estado entre execucoes do `make local-up`. Use `make local-down` para limpar.
 
 ## Limpeza
 
