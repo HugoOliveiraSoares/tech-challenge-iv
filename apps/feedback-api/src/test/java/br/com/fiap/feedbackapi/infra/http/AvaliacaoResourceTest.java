@@ -2,14 +2,30 @@ package br.com.fiap.feedbackapi.infra.http;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 
+import br.com.fiap.feedbackplatform.shared.domain.CriticalFeedbackEvent;
+import br.com.fiap.feedbackplatform.shared.port.CriticalFeedbackPublisher;
+import br.com.fiap.feedbackplatform.shared.port.FeedbackRepository;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class AvaliacaoResourceTest {
+    @InjectMock
+    CriticalFeedbackPublisher criticalFeedbackPublisher;
+
+    @InjectMock
+    FeedbackRepository feedbackRepository;
+
     @Test
     void deveCriarAvaliacaoMinima() {
+        doNothing()
+                .when(criticalFeedbackPublisher)
+                .publish(any(CriticalFeedbackEvent.class));
+
         given()
                 .contentType("application/json")
                 .body("{\"descricao\":\"A aula estava confusa e nao consegui acompanhar o conteudo.\",\"nota\":2}")

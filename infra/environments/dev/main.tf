@@ -3,9 +3,13 @@ data "aws_caller_identity" "current" {}
 locals {
   name_prefix = "feedback-platform-${var.environment}"
 
-  # The dev environment is intentionally local-only and targets fakecloud, not real AWS.
+  # Used by Terraform and AWS CLI running directly on the host machine.
+  fakecloud_endpoint = "http://localhost:4566"
+
+  # Used by Lambda containers to reach FakeCloud through the Docker host.
+  fakecloud_lambda_endpoint = "http://host.docker.internal:4566"
+
   fakecloud_access_key = "test"
-  fakecloud_endpoint   = "http://localhost:4566"
   fakecloud_secret_key = "test"
 
   common_tags = {
@@ -92,10 +96,13 @@ module "feedback_api_lambda" {
   policy_json   = data.aws_iam_policy_document.feedback_api.json
 
   environment_variables = {
-    AWS_REGION          = var.aws_region
-    CRITICAL_TOPIC_ARN  = module.sns.topic_arn
-    FEEDBACK_TABLE_NAME = module.dynamodb.table_name
-    LOG_LEVEL           = var.log_level
+    AWS_ACCESS_KEY_ID     = local.fakecloud_access_key
+    AWS_ENDPOINT_URL      = local.fakecloud_lambda_endpoint
+    AWS_REGION            = var.aws_region
+    AWS_SECRET_ACCESS_KEY = local.fakecloud_secret_key
+    CRITICAL_TOPIC_ARN    = module.sns.topic_arn
+    FEEDBACK_TABLE_NAME   = module.dynamodb.table_name
+    LOG_LEVEL             = var.log_level
   }
 
   tags = local.common_tags
@@ -138,7 +145,7 @@ module "weekly_report_lambda" {
   environment_variables = {
     ADMIN_EMAIL_TO                = var.admin_email_to
     AWS_ACCESS_KEY_ID             = local.fakecloud_access_key
-    AWS_ENDPOINT_URL              = local.fakecloud_endpoint
+    AWS_ENDPOINT_URL              = local.fakecloud_lambda_endpoint
     AWS_REGION                    = var.aws_region
     AWS_SECRET_ACCESS_KEY         = local.fakecloud_secret_key
     EMAIL_FROM                    = var.email_from
@@ -194,10 +201,12 @@ module "cloudwatch" {
   notification_topic_arn          = module.sns.topic_arn
   critical_notifier_function_name = module.critical_notifier_lambda.function_name
   weekly_report_function_name     = module.weekly_report_lambda.function_name
+
   lambda_function_names = [
     module.feedback_api_lambda.function_name,
     module.critical_notifier_lambda.function_name,
     module.weekly_report_lambda.function_name
   ]
+
   tags = local.common_tags
 }

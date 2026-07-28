@@ -201,12 +201,15 @@ class NotifyCriticalFeedbackUseCaseTest {
 
     private CriticalFeedbackEvent sampleEvent() {
         return new CriticalFeedbackEvent(
+                "FeedbackCritico",
+                "1.0",
                 FEEDBACK_ID,
-                "correlation-1",
                 "A aula estava confusa e nao consegui acompanhar o conteudo.",
                 2,
                 Urgencia.CRITICA,
-                DATA_ENVIO);
+                DATA_ENVIO,
+                "2026-W22",
+                "correlation-1");
     }
 
     private static class InMemoryIdempotencyGateway implements NotificationIdempotencyGateway {

@@ -2,17 +2,24 @@ services:
   fakecloud:
     image: ghcr.io/faiscadev/fakecloud:latest
     container_name: aws-fakecloud
-    network_mode: host
+#    network_mode: host
+    ports:
+      - "4566:4566"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - SERVICES=dynamodb,sns,ses,events,scheduler,lambda,logs,cloudwatch,iam,apigateway
       - AWS_DEFAULT_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - FAKECLOUD_EXTERNAL_URL=http://localhost:4566
-      - FAKECLOUD_IN_CONTAINER=0
+#     - FAKECLOUD_IN_CONTAINER=0
+      - FAKECLOUD_IN_CONTAINER=1
       - FAKECLOUD_STORAGE_MODE=persistent
-      - FAKECLOUD_DATA_PATH=${PWD}/.fakecloud
+#      - FAKECLOUD_DATA_PATH=${PWD}/.fakecloud
+      - FAKECLOUD_DATA_PATH=/var/lib/fakecloud
       - DEBUG=1
     volumes:
-      - "${PWD}/.fakecloud:${PWD}/.fakecloud"
+#      - "${PWD}/.fakecloud:${PWD}/.fakecloud"
+      - "./.fakecloud:/var/lib/fakecloud"
       - "/var/run/docker.sock:/var/run/docker.sock"

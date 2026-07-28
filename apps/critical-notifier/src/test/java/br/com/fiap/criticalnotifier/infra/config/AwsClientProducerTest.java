@@ -37,28 +37,27 @@ class AwsClientProducerTest {
         AwsClientProducer producer = producer();
 
         try (var sesClient = producer.sesClient();
-                var dynamoDbClient = producer.dynamoDbClient();
-                var defaultDynamoDbClient = DynamoDbClient.builder().region(Region.US_EAST_1).build()) {
+             var dynamoDbClient = producer.dynamoDbClient();
+             var defaultDynamoDbClient = DynamoDbClient.builder()
+                     .region(Region.US_EAST_1)
+                     .build()) {
+
             RetryPolicy sesRetryPolicy = sesClient.serviceClientConfiguration()
-                    .overrideConfiguration()
-                    .retryPolicy()
-                    .orElseThrow();
-            RetryPolicy dynamoDbRetryPolicy = dynamoDbClient.serviceClientConfiguration()
-                    .overrideConfiguration()
-                    .retryPolicy()
-                    .orElseThrow();
-            RetryPolicy defaultDynamoDbRetryPolicy = defaultDynamoDbClient.serviceClientConfiguration()
                     .overrideConfiguration()
                     .retryPolicy()
                     .orElseThrow();
 
             assertEquals(2, sesRetryPolicy.numRetries());
-            assertEquals(defaultDynamoDbRetryPolicy.numRetries(), dynamoDbRetryPolicy.numRetries());
-            assertEquals(defaultDynamoDbRetryPolicy.retryMode(), dynamoDbRetryPolicy.retryMode());
-            assertEquals(defaultDynamoDbRetryPolicy.backoffStrategy(), dynamoDbRetryPolicy.backoffStrategy());
-            assertEquals(
-                    defaultDynamoDbRetryPolicy.throttlingBackoffStrategy(),
-                    dynamoDbRetryPolicy.throttlingBackoffStrategy());
+
+            assertTrue(dynamoDbClient.serviceClientConfiguration()
+                    .overrideConfiguration()
+                    .retryPolicy()
+                    .isEmpty());
+
+            assertTrue(defaultDynamoDbClient.serviceClientConfiguration()
+                    .overrideConfiguration()
+                    .retryPolicy()
+                    .isEmpty());
         }
     }
 

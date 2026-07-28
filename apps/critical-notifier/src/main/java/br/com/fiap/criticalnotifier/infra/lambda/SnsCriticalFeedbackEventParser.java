@@ -34,11 +34,14 @@ public class SnsCriticalFeedbackEventParser {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record CriticalFeedbackEventPayload(
+            String eventType,
+            String eventVersion,
             String feedbackId,
             String correlationId,
             String descricao,
             Integer nota,
             Urgencia urgencia,
+            String periodo,
             Instant dataEnvio) {
 
         CriticalFeedbackEvent toDomain() {
@@ -49,13 +52,15 @@ public class SnsCriticalFeedbackEventParser {
                 throw new DomainValidationException("Campo nota e obrigatorio.");
             }
 
-            return new CriticalFeedbackEvent(
-                    UUID.fromString(feedbackId.trim()),
-                    correlationId,
+            return new CriticalFeedbackEvent(eventType,
+                    eventVersion,
+                    UUID.fromString(feedbackId),
                     descricao,
                     nota,
                     urgencia,
-                    dataEnvio);
+                    dataEnvio,
+                    periodo,
+                    correlationId);
         }
     }
 }
