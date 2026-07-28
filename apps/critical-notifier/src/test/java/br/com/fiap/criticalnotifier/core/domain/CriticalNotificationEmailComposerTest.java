@@ -71,7 +71,6 @@ class CriticalNotificationEmailComposerTest {
         assertTrue(!email.subject().contains("correlationId="));
         assertTrue(!email.body().contains("correlationId:"));
     }
-}
 
     @Test
     void montaEmailComUrgenciaMedia() {

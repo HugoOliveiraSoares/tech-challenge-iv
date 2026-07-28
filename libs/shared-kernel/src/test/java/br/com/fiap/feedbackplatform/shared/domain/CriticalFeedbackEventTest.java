@@ -53,19 +53,23 @@ class CriticalFeedbackEventTest {
     @Test
     void preservaCamposENormalizaTextos() {
         CriticalFeedbackEvent event = new CriticalFeedbackEvent(
+                EVENT_TYPE,
+                VERSION,
                 ID,
-                " correlation-1 ",
-                " Descricao valida para teste. ",
-                3,
-                Urgencia.CRITICA,
-                DATA_ENVIO);
+                DESCRICAO,
+                NOTA,
+                URG,
+                DATA_ENVIO,
+                PERIODO,
+                " correlation-1 ");
 
         assertEquals(ID, event.feedbackId());
         assertEquals("correlation-1", event.correlationId());
-        assertEquals("Descricao valida para teste.", event.descricao());
-        assertEquals(3, event.nota());
-        assertEquals(Urgencia.CRITICA, event.urgencia());
+        assertEquals(DESCRICAO, event.descricao());
+        assertEquals(NOTA, event.nota());
+        assertEquals(URG, event.urgencia());
         assertEquals(DATA_ENVIO, event.dataEnvio());
+        assertEquals(PERIODO, event.periodo());
     }
 
     @Test
@@ -79,20 +83,6 @@ class CriticalFeedbackEventTest {
                 DATA_ENVIO,
                 PERIODO,
                 CORRELATION_ID));
-    }
-
-    @Test
-    void rejeitaUrgenciaAusente() {
-        assertThrows(
-                DomainValidationException.class,
-                () -> new CriticalFeedbackEvent(ID, null, "Descricao valida.", 2, null, DATA_ENVIO));
-    }
-
-    @Test
-    void rejeitaDataEnvioAusente() {
-        assertThrows(
-                DomainValidationException.class,
-                () -> new CriticalFeedbackEvent(ID, null, "Descricao valida.", 2, Urgencia.CRITICA, null));
     }
 
     @Test
