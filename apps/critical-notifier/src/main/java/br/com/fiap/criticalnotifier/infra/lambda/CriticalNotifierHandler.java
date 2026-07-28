@@ -35,8 +35,8 @@ public class CriticalNotifierHandler implements RequestHandler<SNSEvent, Critica
         int sent = 0;
         int skipped = 0;
 
-        for (SNSRecord record : event.getRecords()) {
-            CriticalFeedbackEvent criticalFeedbackEvent = parseRecord(record);
+        for (SNSRecord rec : event.getRecords()) {
+            CriticalFeedbackEvent criticalFeedbackEvent = parseRecord(rec);
             MDC.put("operation", "handle_sns_critical_feedback");
             MDC.put("feedbackId", criticalFeedbackEvent.feedbackId().toString());
             if (criticalFeedbackEvent.correlationId() != null) {
@@ -64,12 +64,12 @@ public class CriticalNotifierHandler implements RequestHandler<SNSEvent, Critica
         return new Output("OK", sent, skipped);
     }
 
-    private CriticalFeedbackEvent parseRecord(SNSRecord record) {
-        if (record == null || record.getSNS() == null || record.getSNS().getMessage() == null) {
+    private CriticalFeedbackEvent parseRecord(SNSRecord rec) {
+        if (rec == null || rec.getSNS() == null || rec.getSNS().getMessage() == null) {
             throw new DomainValidationException("Registro SNS invalido.");
         }
 
-        return eventParser.parse(record.getSNS().getMessage());
+        return eventParser.parse(rec.getSNS().getMessage());
     }
 
     public record Output(String status, int sent, int skipped) {
