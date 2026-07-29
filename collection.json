@@ -1,0 +1,79 @@
+{
+  "info": {
+    "name": "Untitled Collection",
+    "description": null,
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "avaliacao",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "description": "",
+            "disabled": false,
+            "type": "default"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "description": "",
+        "url": {
+          "raw": "https://{{API_BASE_URL}}/avaliacao",
+          "protocol": "https",
+          "host": [
+            "{{API_BASE_URL}}"
+          ],
+          "path": [
+            "avaliacao"
+          ],
+          "query": [],
+          "variable": []
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"descricao\": \"A aula estava confusa e nao consegui acompanhar o conteudo.\",\n  \"nota\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "description": "",
+        "url": {
+          "raw": "https://{{API_BASE_URL}}/health",
+          "protocol": "https",
+          "host": [
+            "{{API_BASE_URL}}"
+          ],
+          "path": [
+            "health"
+          ],
+          "query": [],
+          "variable": []
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "API_BASE_URL",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}
